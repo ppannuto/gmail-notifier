@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed version="0.3" xmlns="http://purl.org/atom/ns#">
+<title>Gmail - Inbox for psquared89@gmail.com</title>
+<tagline>New messages in your Gmail Inbox</tagline>
+<fullcount>3</fullcount>
+<link rel="alternate" href="http://mail.google.com/mail" type="text/html" />
+<modified>2009-08-17T02:51:41Z</modified>
+<entry>
+	<title>FW: NYT - What is the avg american doing at this time?</title>
+	<summary>From: Alex Edelsburg Sent: Monday, August 03, 2009 8:29 PM To: Rob Keim; Pat Pannuto Subject: NYT ...</summary>
+	<link rel="alternate" href="http://mail.google.com/mail?account_id=psquared89%40gmail.com&amp;message_id=122e645b9c427f2c&amp;view=conv&amp;extsrc=atom" type="text/html" />
+	<modified>2009-08-04T16:37:25Z</modified>
+	<issued>2009-08-04T16:37:25Z</issued>
+	<id>tag:gmail.google.com,2004:1310094886237798188</id>
+	<author>
+		<name>Pat Pannuto</name>
+		<email>t-papann@microsoft.com</email>
+	</author>
+</entry>
+<entry>
+	<title>XNA Creator Code</title>
+	<summary>User: NTDEV\\T-PAPANN Date Created: 8/3/2009 9:30:22 AM XNA Creators Club (12 Month): GHDB8-DW64H ...</summary>
+	<link rel="alternate" href="http://mail.google.com/mail?account_id=psquared89%40gmail.com&amp;message_id=122e119bac8f3f31&amp;view=conv&amp;extsrc=atom" type="text/html" />
+	<modified>2009-08-03T16:31:15Z</modified>
+	<issued>2009-08-03T16:31:15Z</issued>
+	<id>tag:gmail.google.com,2004:1310003901924065073</id>
+	<author>
+		<name>Pat Pannuto</name>
+		<email>pat.pannuto@gmail.com</email>
+	</author>
+</entry>
+<entry>
+	<title>circle</title>
+	<summary>Pat Pannuto Microsoft | Core OS Division | Upgrade &amp; Migration, SDE Intern Michigan Student ...</summary>
+	<link rel="alternate" href="http://mail.google.com/mail?account_id=psquared89%40gmail.com&amp;message_id=122d4406b703a987&amp;view=conv&amp;extsrc=atom" type="text/html" />
+	<modified>2009-08-01T04:38:27Z</modified>
+	<issued>2009-08-01T04:38:27Z</issued>
+	<id>tag:gmail.google.com,2004:1309777862265645447</id>
+	<author>
+		<name>Pat Pannuto</name>
+		<email>pat.pannuto@gmail.com</email>
+	</author>
+</entry>
+</feed>
