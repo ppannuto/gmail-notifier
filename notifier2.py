@@ -1,11 +1,15 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 # Gmail Notifier v2
+
+import logging
+logging.basicConfig (level=logging.DEBUG, format="%(asctime)s [%(levelname)s] %(name)s:%(lineno)d %(message)s")
+logger = logging.getLogger ('gmail-notifier2')
 
 import gtk
 import threading
 import pynotify
 if not pynotify.init ("Gmail Notifier 2"):
-	print "Error loading pynotify, dying..."
+	logger.critical ("Error loading pynotify, dying...")
 	raise Exception
 from time import sleep
 
@@ -13,8 +17,19 @@ import keyring
 import gmailStatusIcon
 import gmailLib
 
+def onNewMail(args, emails):
+	gtk.gdk.threads_enter ()
+	if len(emails):
+		args[0].set_from_file(gmailStatusIcon.TRAY_NEWMAIL)
+	else:
+		args[0].set_from_file(gmailStatusIcon.TRAY_NOMAIL)
+	gtk.gdk.threads_leave ()
+
 def on_update(data):
-	print 'update clicked'
+	logger.debug ('on_update clicked')
+
+def on_tellMe(data):
+	logger.debug ('on_tellMe clicked')
 
 def on_preferences(data):
 	from gnomekeyring import NoMatchError
@@ -88,79 +103,6 @@ def on_close(data):
 	exit (0)
 
 
-class UpdateThread(threading.Thread):
-
-	def __init__(self, status_icon, username, password, proxy=None):
-		threading.Thread.__init__(self)
-		try:
-			gtk.gdk.threads_enter ()
-			self.status_icon = status_icon
-		finally:
-			gtk.gdk.threads_leave ()
-		self.username = username
-		self.password = password
-		self.proxy = proxy
-
-	def run(self):
-		gC = gmailLib.GmailConn (self.username, self.password, self.proxy)
-		print 'gC created successfully'
-		last_modification_time = 0
-
-		# A list of all the emails already shown to the user, allows us to only show new emails
-		shown = []
-		state = 'NOCONN'
-
-		while True:
-			last_state = state
-			modification_time = gC.getModificationTime ()
-			if not gC.isConnected():
-				state = 'NOCONN'
-			elif last_modification_time != modification_time:
-				last_modification_time = modification_time
-				
-				show = []
-
-				for email in gC.getAllEmails ():
-					if email['id'] not in shown:
-						show.append(email)
-						shown.append(email['id'])
-
-				if len(show) == 0:
-					if gC.getUnreadMessageCount () == 0:
-						state = 'NOMAIL'
-					else:
-						state = 'NEWMAIL'
-				elif len(show) == 1:
-					state = 'NEWMAIL'
-					n = pynotify.Notification (email['title'], email['summary'])
-					n.show()
-				else:
-					state = 'NEWMAIL'
-					text = "(newest): " + show[0]['title']
-					text += '\n\n'
-					text += show[0]['summary']
-					n = pynotify.Notification ('You have ' + str (gC.getUnreadMessageCount ()) + ' unread messages', text)
-					n.show()
-			else:
-				if gC.getUnreadMessageCount () == 0:
-					state = 'NOMAIL'
-				else:
-					state = 'NEWMAIL'
-
-			if state != last_state:
-				try:
-					gtk.gdk.threads_enter ()
-					if state == 'NOCONN':
-						self.status_icon.set_from_file (self.status_icon.TRAY_NOCONN)
-					elif state == 'NOMAIL':
-						self.status_icon.set_from_file (self.status_icon.TRAY_NOMAIL)
-					elif state == 'NEWMAIL':
-						self.status_icon.set_from_file (self.status_icon.TRAY_NEWMAIL)
-				finally:
-					gtk.gdk.threads_leave ()
-			sleep (20)
-
-
 def main():
 	gtk.gdk.threads_init()
 
@@ -169,21 +111,18 @@ def main():
 	if not Keyring.has_credentials ():
 		on_preferences (Keyring)
 		if not Keyring.has_credentials ():
-			print "Failed to set credentials"
+			logger.critical ("Failed to set credentials")
 			raise Exception
 
-	print 'd'
 	username, password = Keyring.get_credentials ()
-	print 'e'
+	logger.debug ('username (' + username + ') and password (REDACTED) obtained')
 
 	#Set up the status icon (tray icon)
-	status_icon = gmailStatusIcon.GmailStatusIcon(on_update, on_preferences, on_about, on_close)
-	print 'f'
+	status_icon = gmailStatusIcon.GmailStatusIcon(on_update, on_tellMe, on_preferences, on_about, on_close)
+	logger.debug ('status icon initialized')
 
-	update_thread = UpdateThread (status_icon, username, password)
-	update_thread.daemon = True
-	update_thread.start()
-	print 'g'
+	gConn = gmailLib.GmailConn (username, password, onNewMail=onNewMail, onNewMailArgs=(status_icon,), start=True, logLevel=logging.DEBUG)
+	logger.debug ('gConn created')
 
 	gtk.main()
 
