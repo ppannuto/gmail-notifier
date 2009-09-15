@@ -13,13 +13,14 @@ class GmailStatusIcon(gtk.StatusIcon):
 	TRAY_NOMAIL = TRAY_NOMAIL
 	TRAY_NEWMAIL = TRAY_NEWMAIL
 
-	def __init__(self, on_update, on_tellMe, on_preferences, on_about, on_close):
+	def __init__(self, on_update, on_tellMe, on_preferences, on_about, on_close, args=None):
 		gtk.StatusIcon.__init__(self)
 		menu = '''
 			<ui>
 				<menubar name="Menubar">
 					<menu action="Menu">
 						<menuitem action="Inbox" />
+						<menuitem action="Update" />
 						<menuitem action="TellMe" />
 						<separator />
 						<menuitem action="Preferences" />
@@ -32,14 +33,15 @@ class GmailStatusIcon(gtk.StatusIcon):
 		actions = [
 				('Menu', None, 'Menu'),
 				('Inbox', None, 'Go to my _Inbox...', None, 'Open your inbox in the default browser', self.on_inbox),
-				('TellMe', None, 'Tell me again...', None, 'Repeat the last notification', on_tellMe),
+				('Update', gtk.STOCK_REFRESH, '_Update now', None, 'Force an immediate refresh', on_update),
+				('TellMe', None, '_Tell me again', None, 'Repeat the last notification', on_tellMe),
 				('Preferences', gtk.STOCK_PREFERENCES, '_Preferences...', None, 'Configure GmailNotifier2', on_preferences),
 				('About', gtk.STOCK_ABOUT, '_About...', None, 'About GmailNotifier2', on_about),
 				('Close', gtk.STOCK_CLOSE, '_Close', None, 'Exit GmailNotifier2', on_close)
 			  ]
 
-		ag = gtk.ActionGroup ('Actions')
-		ag.add_actions (actions)
+		ag = gtk.ActionGroup ('Gmail Notifier Actions')
+		ag.add_actions (actions, user_data=args)
 		self.manager = gtk.UIManager ()
 		self.manager.insert_action_group (ag, 0)
 		self.manager.add_ui_from_string (menu)

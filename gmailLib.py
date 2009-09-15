@@ -151,7 +151,7 @@ USAGE:
 
 	Once initiated, all of the gConn.get* methods are valid. Note that each object takes an optional Update
 	parameter with a default value of None. There are 3 valid values for Update, note 'None' may and 'True' will BLOCK:
-		None -- (DEFAULT) if self.last_update > self.timeout then query GMail before returning. In an effort
+		None -- (DEFAULT) if self.last_update > self.frequency then query GMail before returning. In an effort
 			to simplfy caller's implementation, the cached value will be returned if the update fails,
 			to explicitly check if the information is up to date, use Update=True, or gConn.isConnected
 		True -- A new scrape of GMail will be forced.  If the update fails, a GmailConn.ConnectionError will
@@ -159,12 +159,12 @@ USAGE:
 		False - Returns the cached data, ignoring self.last_update time. This call is gaurenteed to be non-blocking
 
 
-	Alternatively, you may call gConn.start(), which will spawn a worker thread that continuously updates the email
-	data every self.timeout seconds.  Whenever gConn determines it has 'new' new mail, it will call self.onNewMail (see
+	Alternatively, you may call gConn.start(), which will spawn a daemon thread that continuously updates the email
+	data every self.frequency seconds.  Whenever gConn determines it has 'new' new mail, it will call self.onNewMail (see
 	Gmail.Conn.set_onNewMail for prototype / usage).
 	
 	Note, some care must be taken after calling start(), specifically, you may no longer edit any gConn variables (onNewMail,
-	timeout, etc) directly, rather you must use the thread-safe gConn.set_onNewMail() methods instead.
+	frequency, etc) directly, rather you must use the thread-safe gConn.set_onNewMail() methods instead.
 
 OPTIONAL ARGUMENTS:
 	proxy=None
@@ -178,11 +178,19 @@ OPTIONAL ARGUMENTS:
 		Identical to calling gConn.start()
 
 	onNewMail=None, also GmailConn.set_onNewMail()
-		Sets the callback function, see GmailConn.set_onNewMail()
+	onNewMailArgs=None
+		Sets the callback function (and args to pass), see GmailConn.set_onNewMail
+
+	onDisconnect=None, also GmailConn.set_onDisconnect()
+	onDisconnectArgs=None
+		Sets the callback function (and args to pass), see GmailConn.set_onDisconnect
 	
-	timeout=TIMEOUT [default: 20], also GmailConn.set_timeout()
+	frequency=TIMEOUT [default: 20], also GmailConn.set_frequency()
 		The frequncy at which to poll GMail in seconds.
 		_NOTE_: Values < 20sec are not recommended as GMail may get mad at you...
+
+	disconnect_threshold=THRESHOLD [default: 60], also GmailConn.set_disconnect_threshold()
+		The amount of time allowed to pass between successful updates before gConn will consider itself disconnected
 
 	logLevel=logging.WARNING, also GmailConn.set_logLevel()
 		The level at which to log, from the standard python logging module
@@ -192,8 +200,9 @@ OPTIONAL ARGUMENTS:
 	host = "https://mail.google.com"
 	url = host + "/mail/feed/atom"
 
-	TIMEOUT = 20	# Number of seconds until data is considered 'stale'
-	last_update = 0
+	TIMEOUT = 20		# Number of seconds until data is considered 'stale'
+	THRESHOLD = 60		# Number of seconds allowed between successful updates until gConn is considered disconnected
+	last_update = 0		# The time (time.time()) of the last _successful_ update
 
 	class Error(Exception):
 		"""Base class for exceptions in this module"""
@@ -229,35 +238,54 @@ OPTIONAL ARGUMENTS:
 		NOTE: These types of errors are usually transient, (e.g. lost connection)
 		"""
 
-	def __init__(self, username, password, proxy=None, onNewMail=None, onNewMailArgs=None, notifications=True, start=False, timeout=TIMEOUT, logLevel=logging.WARNING):
+	def __init__(
+			self,
+			username,
+			password,
+			proxy=None,
+			onNewMail=None,
+			onNewMailArgs=None,
+			onDisconnect=None,
+			onDisconnectArgs=None,
+			notifications=True,
+			start=False,
+			frequency=TIMEOUT,
+			disconnect_threshold=THRESHOLD,
+			logLevel=logging.WARNING
+			):
+		
 		# Copy in relevant initialization variables
-		self.onNewMail = onNewMail
-		self.onNewMailArgs = onNewMailArgs
-
 		self.logLevel = logLevel
 		logging.basicConfig (level=self.logLevel, format="%(asctime)s [%(levelname)s] %(name)s:%(lineno)d %(message)s")
 		self.logger = logging.getLogger ('gmailLib')
-
+		
 		self.notifications = notifications
 		if (notifications):
 			import pynotify
 			if not pynotify.init ('Gmail Notifier 2'):
 				self.logger.critical ("Error loading / initializing pynotify module")
 				raise ImportError
-
-		self.timeout = timeout
-
+		
+		self.onNewMail = onNewMail
+		self.onNewMailArgs = onNewMailArgs
+		
+		self.onDisconnect = onDisconnect
+		self.onDisconnectArgs = onDisconnectArgs
+		
+		self.frequency = frequency
+		self.disconnect_threshold = disconnect_threshold
+		
 		# Set up threading
 		self.lock = threading.Lock()
-
+		
 		# Initialize locals
 		self.shown = list()
 		self.last_modified = 0
-
+		
 		# Add @gmail.com if the caller didn't
 		if (username.rfind("@gmail.com")) == -1:
 			username += "@gmail.com"
-			self.logger.info ("Did not get FQ email address, using" + username)
+			self.logger.info ("Did not get FQ email address, using " + username)
 		
 		self.xml_parser = GmailXmlHandler()
 		
@@ -298,15 +326,15 @@ OPTIONAL ARGUMENTS:
 		self.logger.debug ('updater thread spawned successfully')
 
 	def set_onNewMail(self, onNewMail, onNewMailArgs=None):
-		"""Sets the onNewMail callback.  This function is called whenever a 'new' unread email is recieved. The function
-		is passed two arguments - onNewMailArgs and newEmails, which is an list of all _newly recieved_ emails (as dicts),
-		note this will NOT always be every email in the inbox that GMail considers 'unread', rather, it will be an array
-		of all the emails that have not yet been 'shown' to the object owner.
-
-		To get all of the unread emails, or any other information, use the gConn.get* methods with Update=False
-
-		e.g.
-			def onNewMail(onNewMailArgs, newEmails)
+		"""Sets the onNewMail callback.  This function is called whenever a 'new' unread email is recieved.
+		def onNewMail(onNewMailArgs, newEmails, [gConn])
+			onNewMailArgs	-- Arguments supplied here will be passed to the callback
+			newEmails	-- A list of emails that have not been _shown_ to the caller before. This means if there are
+					   3 unread emails, and a 4th arrives, you will only get ONE email (the newest) in this argument
+			[gConn]		-- You may optionally accept this argument (the library try:'s with it, excepts the TypeError,
+					   and calls again without it), it is a reference to the gConn that made the call. Use this
+					   object to access all emails or other information stored in gConn. It is recommended, but
+					   not required that you set Update=False in each call to this object
 
 		*** This callback is called _whenever_ gConn determines there are 'new' unread emails.  It may be called from
 		the updater thread OR from a call to gConn.get* with Update=None or Update=True ***
@@ -316,13 +344,27 @@ OPTIONAL ARGUMENTS:
 		self.onNewMailArgs = onNewMailArgs
 		self.lock.release ()
 
-	def set_timeout(self, timeout=TIMEOUT):
-		"""Sets timeout frequncy to timeout (in secs), if unspecified, reset to default (20). Note, it may take up to
-		timeout (previous value) seconds for this update to take effect.  If your goal is to suspend the notifier, a
-		better choice would likely be to stop() and then start() again later
+	def set_onDisconnect(self, onDisconnect, onDisconnectArgs=None):
+		"""Sets the onDisconnect callback.  Called whenever time.time() - gConn.last_update > gConn.disconnect_threshold.
+		def onDisconnect(onDisconnectArgs, [gConn])
+			onDisconnectArgs	-- Arguments supplied here will be passed to the callback
+			[gConn]			-- (see set_onNewMail)
+
+		*** This callback is called _whenever_ gConn determines it is disconnected.  It may be called from
+		the updater thread OR from a call to gConn.get* with Update=None or Update=True ***
 		"""
 		self.lock.acquire ()
-		self.timeout = timeout
+		self.onDisconnect = onDisconnect
+		self.onDisconnectArgs = onDisconnectArgs
+		self.lock.release ()
+
+	def set_frequency(self, frequency=TIMEOUT):
+		"""Sets frequency (in secs), if unspecified, reset to default (20). Note, it may take up to
+		frequency (previous value) seconds for this update to take effect.  If your goal is to suspend
+		the notifier, a better choice would likely be to stop() and then start() again later
+		"""
+		self.lock.acquire ()
+		self.frequency = frequency
 		self.lock.release ()
 
 	def set_logLevel(self, logLevel):
@@ -337,14 +379,43 @@ OPTIONAL ARGUMENTS:
 		while True:
 			self.refreshInfo ()
 			self.lock.acquire ()
-			local.timeout = self.timeout
+			local.frequency = self.frequency
 			self.lock.release ()
-			sleep (local.timeout)
+			sleep (local.frequency)
 
 	def sendRequest(self):
 		"""Internal -- There is no reason to call this directly"""
 		return urllib2.urlopen(self.url, timeout=10)
 #		return open('feed.xml', 'r')
+
+	def notify(self, show=None, locked=False):
+		"""Show the newest email. You may provide a list of email dicts (as returned from getAllEmails) for show. Otherwise
+		the cached email list will be used. Note, this function has no Update functionality.
+		
+		This function will attempt to import pynotify. The caller is responsible for catching the ImportError if it occurs.
+		
+		Do not set locked.
+		"""
+		if not locked:
+			self.lock.acquire ()
+		
+		import pynotify
+		if not show:
+			show = self.xml_parser.emails
+		
+		if len (show) == 0:
+			n = pynotify.Notification ('Gmail Notifer', 'You have no unread messages')
+			n.show()
+		elif len (show) == 1:
+			n = pynotify.Notification (show[0]['title'], show[0]['summary'])
+			n.show()
+		else:
+			n = pynotify.Notification ('You have ' + str (self.xml_parser.email_count) + ' unread messages',
+					'(newest): ' + show[0]['title'] + '\n\n' + show[0]['summary'])
+			n.show()
+		
+		if not locked:
+			self.lock.release ()
 
 	def refreshInfo(self):
 		"""Internal -- There is no reason to call this directly"""
@@ -361,24 +432,26 @@ OPTIONAL ARGUMENTS:
 					self.shown.append (email.id)
 					show.append (email.dict())
 			
-			if len (show):
-				if self.notifications:
-					import pynotify
-					if len (show) == 1:
-						n = pynotify.Notification (show[0]['title'], show[0]['summary'])
-						n.show()
-					else:
-						n = pynotify.Notification ('You have ' + str (self.xml_parser.email_count) + ' unread messages',
-								'(newest): ' + show[0]['title'] + '\n\n' + show[0]['summary'])
-						n.show()
+			if len (show) and self.notifications:
+				self.notify (show, locked=True)
 			
 			if self.last_modified != self.xml_parser.modified:
 				self.last_modified = self.xml_parser.modified
 				if self.onNewMail:
 					copy = threading.local()
 					copy.show = show
+					copy.onNewMail = self.onNewMail
+					copy.onNewMailArgs = self.onNewMailArgs
 					self.lock.release ()
-					self.onNewMail (self.onNewMailArgs, copy.show)
+					try:
+						copy.onNewMail (copy.onNewMailArgs, copy.show, self)
+					except TypeError as e:
+						# Don't mask TypeErrors in callback
+						# XXX: This feels like a hack, there must be a better way to do this...
+						if 'takes exactly' in e.args[0]:
+							copy.onNewMail (copy.onNewMailArgs, copy.show)
+						else:
+							raise
 				else:
 					self.lock.release ()
 			else:
@@ -391,7 +464,23 @@ OPTIONAL ARGUMENTS:
 			# This is almost certainly a transient error, likely due to a lost connection, we don't really care
 			# we'll just try to update again in a minute and keep polling until we can actually connect again.
 			self.logger.info ("urllib Error: " + str(inst) + " (ignored)")
-			self.lock.release ()
+			if (time() - self.last_update) > self.disconnect_threshold:
+				self.logger.info ('Disconnected! (last_update: ' + asctime (localtime (self.last_update)) + ')')
+				copy = threading.local ()
+				copy.onDisconnect = self.onDisconnect
+				copy.onDisconnectArgs = self.onDisconnectArgs
+				self.lock.release ()
+				try:
+					copy.onDisconnect (copy.onDisconnectArgs, self)
+				except TypeError as e:
+					# Don't mask TypeErrors in callback
+					# XXX: This feels like a hack, there must be a better way to do this...
+					if 'takes exactly' in e.args[0]:
+						copy.onDisconnect (copy.onDisconnectArgs)
+					else:
+						raise
+			else:
+				self.lock.release ()
 			return False
 
 	def u(self, update):
@@ -399,7 +488,7 @@ OPTIONAL ARGUMENTS:
 			if self.refreshInfo () == False:
 				raise self.ConnectionError
 			return True
-		if (time () - self.last_update) > self.timeout:
+		if (time () - self.last_update) > self.frequency:
 			if update == False:
 				return False
 			return self.refreshInfo ()
@@ -407,8 +496,8 @@ OPTIONAL ARGUMENTS:
 
 	def isConnected(self, update=None):
 		"""Call this method to establish if the gConn object believes itself to be connected. This is currently
-		defined by having valid data within the last self.timeout seconds. Alternatively, set update=True to force an
-		immediate connection validation, even if it has previously connected once in the last self.timeout seconds
+		defined by having valid data within the last self.frequency seconds. Alternatively, set update=True to force an
+		immediate connection validation, even if it has previously connected once in the last self.frequency seconds
 		
 		Note, calling this with update=True will raise a GmailConn.ConnectionError if the connection fails"""
 		return self.u (update)
