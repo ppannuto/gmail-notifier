@@ -19,9 +19,9 @@ class GmailStatusIcon(gtk.StatusIcon):
 			<ui>
 				<menubar name="Menubar">
 					<menu action="Menu">
-						<menuitem action="Inbox" />
 						<menuitem action="Update" />
 						<menuitem action="TellMe" />
+						<menuitem action="Inbox" />
 						<separator />
 						<menuitem action="Preferences" />
 						<menuitem action="About" />
@@ -32,9 +32,9 @@ class GmailStatusIcon(gtk.StatusIcon):
 		'''
 		actions = [
 				('Menu', None, 'Menu'),
-				('Inbox', None, 'Go to my _Inbox...', None, 'Open your inbox in the default browser', self.on_inbox),
 				('Update', gtk.STOCK_REFRESH, '_Update now', None, 'Force an immediate refresh', on_update),
 				('TellMe', None, '_Tell me again', None, 'Repeat the last notification', on_tellMe),
+				('Inbox', None, 'Go to my _Inbox...', None, 'Open your inbox in the default browser', self.on_inbox),
 				('Preferences', gtk.STOCK_PREFERENCES, '_Preferences...', None, 'Configure GmailNotifier2', on_preferences),
 				('About', gtk.STOCK_ABOUT, '_About...', None, 'About GmailNotifier2', on_about),
 				('Close', gtk.STOCK_CLOSE, '_Close', None, 'Exit GmailNotifier2', on_close)
