@@ -379,50 +379,48 @@ OPTIONAL ARGUMENTS:
 
 	def updater(self):
 		"""Internal -- There is no reason to call this directly"""
-		local = threading.local ()
+		locals = threading.local ()
 		while True:
 			self.refreshInfo ()
 			self.lock.acquire ()
-			local.frequency = self.frequency
+			locals.frequency = self.frequency
 			self.lock.release ()
-			sleep (local.frequency)
+			sleep (locals.frequency)
 
 	def sendRequest(self):
 		"""Internal -- There is no reason to call this directly"""
 		return urllib2.urlopen(self.url, timeout=10)
 #		return open('feed.xml', 'r')
 
-	def notify(self, emails=None, locked=False):
+	def notify(self, emails=None, check_connected=True):
 		"""Show the newest email. You may provide a list of email dicts (as returned from getAllEmails) in emails to leverage
 		the notification engine to show an update for a subset of emails. Otherwise the cached email list will be used. The
 		emails argument is assumed to be sorted such that the newest email is emails[0].
 
-		If emails is not provided, the notification engine will prepend a warning to the notification if isConnected() returns
-		False. This check is skipped if emails != None
+		If check_connectd=True, the notification engine will prepend a warning to the notification if isConnected() returns False
 		
 		Note: This function will not automatically update the internal email list
 		
 		Note: This function will attempt to import pynotify. The caller is responsible for catching the ImportError if it occurs.
-		
-		Do not set locked.
 		"""
 		title = ''
 		text = ''
-		connected = self.isConnected (update=False)
 		
-		if not locked:
-			self.lock.acquire ()
+		self.lock.acquire ()
+		connected = self.isConnected (update=False)
 		
 		import pynotify
 		if emails:
 			show = emails
 		else:
-			show = self.xml_parser.emails
+			show = list ()
+			for email in self.xml_parser.emails:
+				show.append (email.dict ())
 		
-		if not connected and not emails:
+		if check_connected and not connected:
 			title = 'Could not connect to GMail'
 			if self.last_update:
-				text = 'Last updated ' + asctime (localtime (self.last_update))
+				text += 'Last updated ' + asctime (localtime (self.last_update))
 				text += '\n\n'
 				text += 'You had ' + str (self.xml_parser.email_count) + ' unread message' + ('s','')[self.xml_parser.email_count == 1]
 				text += ' at the last update'
@@ -430,20 +428,19 @@ OPTIONAL ARGUMENTS:
 				text += 'You have not successfully connected to GMail during this session'
 		else:
 			if len (show) == 0:
-				title = 'You have no unread messages'
-				text = 'Last updated ' + asctime (localtime (self.last_update))
+				title += 'You have no unread messages'
+				text += 'Last updated ' + asctime (localtime (self.last_update))
 			elif len (show) == 1:
-				title = show[0]['title']
-				text = show[0]['summary']
+				title += show[0]['title']
+				text += show[0]['summary']
 			else:
-				title = 'You have ' + str (self.xml_parser.email_count) + ' unread messages'
-				text = '(newest): ' + show[0]['title'] + '\n\n' + show[0]['summary']
+				title += 'You have ' + str (self.xml_parser.email_count) + ' unread messages'
+				text += '(newest): ' + show[0]['title'] + '\n\n' + show[0]['summary']
 		
 		n = pynotify.Notification (title, text)
 		n.show ()
 		
-		if not locked:
-			self.lock.release ()
+		self.lock.release ()
 
 	def refreshInfo(self):
 		"""Internal -- There is no reason to call this directly"""
@@ -465,7 +462,7 @@ OPTIONAL ARGUMENTS:
 					show.append (email.dict())
 			
 			if len (show) and self.notifications:
-				self.notify (show, locked=True)
+				self.notify (show)
 			
 			if self.last_modified != self.xml_parser.modified:
 				self.last_modified = self.xml_parser.modified
@@ -518,12 +515,16 @@ OPTIONAL ARGUMENTS:
 			return False
 
 	def u(self, update, use_disconnect_threshold=False):
-		compare = (self.frequency, self.disconnect_threshold)[use_disconnect_threshold]
 		if update == True:
 			if self.refreshInfo () == False:
 				raise self.ConnectionError
 			return True
-		if (time () - self.last_update) > compare:
+		
+		self.lock.acquire ()
+		locals = threading.local ()
+		locals.compare = (self.frequency, self.disconnect_threshold)[use_disconnect_threshold]
+		self.lock.release ()
+		if (time () - self.last_update) > locals.compare:
 			if update == False:
 				return False
 			return self.refreshInfo ()
@@ -540,34 +541,51 @@ OPTIONAL ARGUMENTS:
 	def getModificationTime(self, update=None):
 		"""Returns the timestamp ( as a float analogous to time.time() ) from the RSS feed when the feed was last updated.
 		This is an appropriate (best) way to poll if there are any new messages"""
+		locals = threading.local ()
 		self.u (update)
-		return self.xml_parser.modified
+		self.lock.acquire ()
+		locals.ret = self.xml_parser.modified
+		self.lock.release ()
+		return locals.ret
 
 	def getUnreadMessageCount(self, update=None):
 		"""Returns the number of unread messages in the gmail inbox"""
+		locals = threading.local ()
 		self.u (update)
+		self.lock.acquire ()
 		if self.xml_parser.email_count != len(self.xml_parser.emails):
 			self.logger.debug ("email_count: " + str (self.xml_parser.email_count))
 			self.logger.debug ("len(emails): " + str (len (self.xml_parser.emails)))
+			self.lock.release ()
 			raise self.ParseError ("email_count did not match len(emails)")
-		return self.xml_parser.email_count
+		locals.ret = self.xml_parser.email_count
+		self.lock.release ()
+		return locals.ret
 
 	def getNewestEmail(self, update=None):
 		"""Returns the newest available email"""
+		locals = threading.local ()
 		self.u (update)
+		self.lock.acquire ()
 		if self.xml_parser.email_count == 0:
+			self.lock.release ()
 			return None
 		else:
-			return self.xml_parser.emails[-1].dict()
+			locals.ret = self.xml_parser.emails[-1].dict()
+			self.lock.release ()
+			return locals.ret
 
 	def getAllEmails(self, update=None, limit=10):
 		"""Returns all unread messages, note the 'limit' parameter, which may be disabled by setting it < 0"""
+		locals = threading.local ()
 		self.u (update)
-		ret = list()
-		cnt = 0
+		self.lock.acquire ()
+		locals.ret = list()
+		locals.cnt = 0
 		for email in self.xml_parser.emails:
-			if (cnt >= limit) and (limit > 0):
+			if (locals.cnt >= limit) and (limit > 0):
 				break
-			ret.append(email.dict())
-			cnt += 1
-		return ret
+			locals.ret.append(email.dict())
+			locals.cnt += 1
+		self.lock.release ()
+		return locals.ret
