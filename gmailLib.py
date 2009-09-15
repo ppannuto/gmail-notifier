@@ -343,7 +343,7 @@ OPTIONAL ARGUMENTS:
 
 	def sendRequest(self):
 		"""Internal -- There is no reason to call this directly"""
-		return urllib2.urlopen(self.url)
+		return urllib2.urlopen(self.url, timeout=10)
 #		return open('feed.xml', 'r')
 
 	def refreshInfo(self):
