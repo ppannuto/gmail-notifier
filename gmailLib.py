@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # gmailLib 0.1 by Pat Pannuto <pat.pannuto@gmail.com>
-# based loosely on gmailatom 0.0.1 by Juan Grande <juan.grande@gmail.com>
+# based loosely on gmailatom 0.0.1 by Juan Grande <juan.grande@gmail.com> from the original gmail-notifier
 
 from xml import sax
 from xml.sax import saxutils
@@ -13,7 +13,7 @@ from xml.utils.iso8601 import parse as parse_time
 import urllib2
 import threading
 import logging
-from time import time,sleep,asctime,localtime
+from time import time,asctime,localtime
 
 try:
 	import pynotify

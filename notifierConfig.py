@@ -2,9 +2,21 @@ import gtk
 import logging
 import threading
 
+module_lock = threading.Lock ()
+
 class NotifierConfigWindow:
 
+	class Error(Exception):
+		pass
+
+	class AlreadyRunningError(Error):
+		pass
+
 	def __init__(self, username=None, password=None, log_level=logging.WARNING):
+		# We only allow one instance to run at a time
+		if not module_lock.acquire (False):
+			raise self.AlreadyRunningError
+
 		# Set up logging
 		logging.basicConfig (level=log_level, format="%(asctime)s [%(levelname)s]\t{%(thread)s} %(name)s:%(lineno)d %(message)s")
 		self.logger = logging.getLogger ('configWindow')
@@ -96,6 +108,7 @@ class NotifierConfigWindow:
 
 	def onDelete(self, widget, user_params=None):
 		self.window.destroy ()
+		module_lock.release ()
 		self.destroy_event.set ()
 
 	def onClose(self, widget, user_params=None):
@@ -118,9 +131,6 @@ class NotifierConfigWindow:
 		self.username = ''
 		self.password = ''
 		self.onDelete (widget, user_params)
-
-	def onDestroy(self, widget, user_params=None):
-		self.destroy_event.set ()
 
 	def wait(self, timeout=None):
 		self.destroy_event.wait (timeout=timeout)

@@ -89,21 +89,25 @@ def preferences_thread(entry=None, gConn=None, gtk_locked=False):
 	logger.debug ('preferences called (gConn: ' + str(gConn) + ')')
 	Keyring = keyring.Keyring ('gmail-notifier2', 'mail.google.com', 'https')
 
-	if Keyring.has_credentials ():
-		username, password = Keyring.get_credentials ()
-		logger.debug ('preferences: old credentials: ' + username + '/PASSWORD')
-		if not gtk_locked:
-			gtk.gdk.threads_enter ()
-		config = notifierConfig.NotifierConfigWindow (username, password, log_level=logging.DEBUG)
-		if not gtk_locked:
-			gtk.gdk.threads_leave ()
-	else:
-		logger.debug ('preferences: no old credentials')
-		if not gtk_locked:
-			gtk.gdk.threads_enter ()
-		config = notifierConfig.NotifierConfigWindow (log_level=logging.DEBUG)
-		if not gtk_locked:
-			gtk.gdk.threads_leave ()
+	try:
+		if Keyring.has_credentials ():
+			username, password = Keyring.get_credentials ()
+			logger.debug ('preferences: old credentials: ' + username + '/PASSWORD')
+			if not gtk_locked:
+				gtk.gdk.threads_enter ()
+			config = notifierConfig.NotifierConfigWindow (username, password, log_level=logging.DEBUG)
+			if not gtk_locked:
+				gtk.gdk.threads_leave ()
+		else:
+			logger.debug ('preferences: no old credentials')
+			if not gtk_locked:
+				gtk.gdk.threads_enter ()
+			config = notifierConfig.NotifierConfigWindow (log_level=logging.DEBUG)
+			if not gtk_locked:
+				gtk.gdk.threads_leave ()
+	except notifierConfig.NotifierConfigWindow.AlreadyRunningError:
+		logger.info ('attempt to open a second session of preferences -- this is likely indicative of a BUG')
+		return
 
 	config.wait ()
 	if config.username == '' or config.password == '':
