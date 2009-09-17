@@ -162,12 +162,15 @@ USAGE:
 		False - Returns the cached data, ignoring self.last_update time. This call is gaurenteed to be non-blocking
 
 
-	Alternatively, you may call gConn.start(), which will spawn a daemon thread that continuously updates the email
+	Alternatively, you may call gConn.start, which will spawn a daemon thread that continuously updates the email
 	data every self.frequency seconds.  Whenever gConn determines it has 'new' new mail, it will call self.onNewMail (see
 	Gmail.Conn.set_onNewMail for prototype / usage).
 	
-	Note, some care must be taken after calling start(), specifically, you may no longer edit any gConn variables (onNewMail,
+	Note, some care must be taken after calling start, specifically, you may no longer edit any gConn variables (onNewMail,
 	frequency, etc) directly, rather you must use the thread-safe gConn.set_onNewMail() methods instead.
+
+
+	So long as you only use the exposed methods, a gConn object is fully reentrant.
 
 OPTIONAL ARGUMENTS:
 	proxy=None
@@ -178,15 +181,19 @@ OPTIONAL ARGUMENTS:
 		the new mail(s).  It relies on the same internal bookkeeping of 'new' mails as the rest of the module
 
 	start=False
-		Identical to calling gConn.start()
+		Identical to calling gConn.start
 
-	onNewMail=None, also GmailConn.set_onNewMail()
+	onNewMail=None, also GmailConn.set_onNewMail
 	onNewMailArgs=None
 		Sets the callback function (and args to pass), see GmailConn.set_onNewMail
 
-	onDisconnect=None, also GmailConn.set_onDisconnect()
+	onDisconnect=None, also GmailConn.set_onDisconnect
 	onDisconnectArgs=None
 		Sets the callback function (and args to pass), see GmailConn.set_onDisconnect
+
+	onAuthenticationError=None, also GmailConn.set_onAuthenticationError
+	onAuthenticationErrorArgs=None
+		Sets the callback function (and args to pass), see GmailConn.set_onAuthenticationError
 	
 	frequency=TIMEOUT [default: 20], also GmailConn.set_frequency()
 		The frequncy at which to poll GMail in seconds.
@@ -219,6 +226,10 @@ OPTIONAL ARGUMENTS:
 		exists to handle that case"""
 		pass
 
+	class AuthenticationError(Error):
+		"""This error is raised if we receive a 401 Unauthorized. It means the username/password is incorrect"""
+		pass
+
 	class ParseError(Error):
 		"""The library had some type of trouble parsing the xml feed.  This is likely a transient error, however
 		if it persists, it may indicate that google changed the structure of their feed, and the code needs to be updated
@@ -228,11 +239,11 @@ OPTIONAL ARGUMENTS:
 		pass
 
 	class UninitializedError(Error):
-		"""An attempt to call one of gConn's functions was made prior to calling 'start()'"""
+		"""An attempt to call one of gConn's functions was made prior to calling 'start'"""
 		pass
 
 	class AlreadyInitalizedError(Error):
-		"""A call was made to 'start()' after the object was already running"""
+		"""A call was made to 'start' after the object was already running"""
 		pass
 
 	class ConnectionError(Error):
@@ -250,6 +261,8 @@ OPTIONAL ARGUMENTS:
 			onNewMailArgs=None,
 			onDisconnect=None,
 			onDisconnectArgs=None,
+			onAuthenticationError=None,
+			onAuthenticationErrorArgs=None,
 			notifications=True,
 			start=False,
 			frequency=TIMEOUT,
@@ -259,7 +272,7 @@ OPTIONAL ARGUMENTS:
 		
 		# Copy in relevant initialization variables
 		self.logLevel = logLevel
-		logging.basicConfig (level=self.logLevel, format="%(asctime)s [%(levelname)s] %(name)s:%(lineno)d %(message)s")
+		logging.basicConfig (level=self.logLevel, format="%(asctime)s [%(levelname)s]\t{%(thread)s} %(name)s:%(lineno)d %(message)s")
 		self.logger = logging.getLogger ('gmailLib')
 		
 		self.notifications = notifications
@@ -283,7 +296,11 @@ OPTIONAL ARGUMENTS:
 		self.network_lock = threading.Lock ()
 		
 		# Initialize locals
-		self.shown = list()
+		self.started = False
+		self.events = list ()
+		self.shown = list ()
+		self.auth_error = False
+		self.auth_error_running = False
 		self.last_modified = 0
 		
 		# Add @gmail.com if the caller didn't
@@ -293,29 +310,17 @@ OPTIONAL ARGUMENTS:
 		
 		self.xml_parser = GmailXmlHandler()
 		
-		# initialize authorization handler
-		auth_handler = urllib2.HTTPBasicAuthHandler()
-		auth_handler.add_password( self.realm, self.host, username, password)
-		
-		# manage proxy
-		if proxy:
-			proxy_handler = urllib2.ProxyHandler({'http': proxy})
-			opener = urllib2.build_opener(proxy_handler, auth_handler)
-		else:
-			opener = urllib2.build_opener(auth_handler)
-		
-		urllib2.install_opener(opener)
+		self.resetCredentials (username, password, proxy)
 		
 		# Start the gConn object if requested (not default)
-		self.started = False
 		if (start):
-			self.start()
+			self.start ()
 
 		self.logger.debug ("GmailConn.__init__ completed successfully")
 
 	def start(self):
 		"""(nonblocking) Spawns an updater thread that will poll GMail. You may poll the gConn object for updates,
-		or register a callback as gConn.onNewMail (NOTE: Once a gConn object is start()ed, use gConn.set_onNewMail to
+		or register a callback as gConn.onNewMail (NOTE: Once a gConn object is start'ed, use gConn.set_onNewMail to
 		change this in a thread-safe manner)"""
 		self.lock.acquire()
 		if self.started:
@@ -324,7 +329,7 @@ OPTIONAL ARGUMENTS:
 
 		self.thread = threading.Thread (group=None, target=self.updater)
 		self.thread.daemon = True
-		self.thread.start()
+		self.thread.start ()
 		self.started = True
 		self.lock.release()
 		self.logger.debug ('updater thread spawned successfully')
@@ -362,10 +367,28 @@ OPTIONAL ARGUMENTS:
 		self.onDisconnectArgs = onDisconnectArgs
 		self.lock.release ()
 
+	def set_onAuthenticationError(self, onAuthenticationError, onAuthenticationErrorArgs=None):
+		"""Sets the onAuthenticationError callback.  In the event of an authentication error (incorrect username/password),
+		a gConn object will first attempt to call this function. If it is not defined, an AuthenticationError will be raised
+
+		def onAuthenticationError(onAuthenticationError, [gConn])
+			onAuthenticationErrorArgs	-- Arguments supplied here will be passed to the callback
+			[gConn]				-- (see set_onNewMail)
+
+		Note: If you application daemonizes gConn (that is, calls start), you _must_ implement this method, otherwise
+		the uncaught AuthenticationError will simply kill off the 'updater' thread
+
+		Note: An authentication error will suspend the updater thread until a call to resetCredentials is made
+		"""
+		self.lock.acquire ()
+		self.onAuthenticationError = onAuthenticationError
+		self.onAuthenticationErrorArgs = onAuthenticationErrorArgs
+		self.lock.release ()
+
 	def set_frequency(self, frequency=TIMEOUT):
 		"""Sets frequency (in secs), if unspecified, reset to default (20). Note, it may take up to
 		frequency (previous value) seconds for this update to take effect.  If your goal is to suspend
-		the notifier, a better choice would likely be to stop() and then start() again later
+		the notifier, a better choice would likely be to stop() and then start again later
 		"""
 		self.lock.acquire ()
 		self.frequency = frequency
@@ -377,20 +400,38 @@ OPTIONAL ARGUMENTS:
 		self.logger.setLevel (logLevel)
 		self.lock.release ()
 
+	def update(self, async=False):
+		"""Force an update. If the async parameter is True, a one-off thread will be spawned to try to update. Otherwise,
+		this function will block until the update is complete.
+		
+		Note: If an async update fails for any reason, you will not recieve any indication (except perhaps
+		onAuthenticationError), but any other transient error will be lost.
+		"""
+		if async:
+			t = threading.Thread (target=self.refreshInfo)
+			t.daemon = True
+			t.start ()
+		else:
+			return self.refreshInfo ()
+
 	def updater(self):
 		"""Internal -- There is no reason to call this directly"""
 		locals = threading.local ()
+		locals.event = threading.Event ()
+		self.lock.acquire ()
+		self.events.append ((threading.current_thread ().getName (), locals.event))
+		self.lock.release ()
 		while True:
-			self.refreshInfo ()
+			self.lock.acquire ()
+			locals.auth_error = self.auth_error
+			self.lock.release ()
+			if not locals.auth_error:
+				self.refreshInfo ()
 			self.lock.acquire ()
 			locals.frequency = self.frequency
 			self.lock.release ()
-			sleep (locals.frequency)
-
-	def sendRequest(self):
-		"""Internal -- There is no reason to call this directly"""
-		return urllib2.urlopen(self.url, timeout=10)
-#		return open('feed.xml', 'r')
+			locals.event.wait (timeout=locals.frequency)
+			locals.event.clear ()
 
 	def notify(self, emails=None, check_connected=True):
 		"""Show the newest email. You may provide a list of email dicts (as returned from getAllEmails) in emails to leverage
@@ -401,7 +442,7 @@ OPTIONAL ARGUMENTS:
 		
 		Note: This function will not automatically update the internal email list
 		
-		Note: This function will attempt to import pynotify. The caller is responsible for catching the ImportError if it occurs.
+		Note: This function will attempt to use pynotify. The caller is responsible for catching the NameError if it occurs.
 		"""
 		title = ''
 		text = ''
@@ -409,7 +450,6 @@ OPTIONAL ARGUMENTS:
 		self.lock.acquire ()
 		connected = self.isConnected (update=False)
 		
-		import pynotify
 		if emails:
 			show = emails
 		else:
@@ -417,8 +457,11 @@ OPTIONAL ARGUMENTS:
 			for email in self.xml_parser.emails:
 				show.append (email.dict ())
 		
-		if check_connected and not connected:
-			title = 'Could not connect to GMail'
+		if self.auth_error:
+			title += 'Authentication Error'
+			text += 'Bad username or password'
+		elif check_connected and not connected:
+			title += 'Could not connect to GMail'
 			if self.last_update:
 				text += 'Last updated ' + asctime (localtime (self.last_update))
 				text += '\n\n'
@@ -442,6 +485,34 @@ OPTIONAL ARGUMENTS:
 		
 		self.lock.release ()
 
+	def resetCredentials(self, username, password, proxy=None):
+		self.lock.acquire ()
+		reload (urllib2)
+		
+		# initialize authorization handler
+		auth_handler = urllib2.HTTPBasicAuthHandler()
+		auth_handler.add_password( self.realm, self.host, username, password)
+		
+		# manage proxy
+		if proxy:
+			proxy_handler = urllib2.ProxyHandler({'http': proxy})
+			opener = urllib2.build_opener(proxy_handler, auth_handler)
+		else:
+			opener = urllib2.build_opener(auth_handler)
+		
+		urllib2.install_opener(opener)
+		
+		if self.started:
+			self.events[0][1].set ()
+		
+		self.auth_error = False
+		self.lock.release ()
+
+	def sendRequest(self):
+		"""Internal -- There is no reason to call this directly"""
+		return urllib2.urlopen(self.url, timeout=10)
+#		return open('feed.xml', 'r')
+
 	def refreshInfo(self):
 		"""Internal -- There is no reason to call this directly"""
 		# get the page and parse it
@@ -453,6 +524,7 @@ OPTIONAL ARGUMENTS:
 			self.lock.acquire ()
 			raw_xml = sax.parseString (locals.raw_xml, self.xml_parser)
 			self.last_update = time ()
+			self.auth_error = False
 			self.logger.info ("refreshInfo completed successfully at " + asctime (localtime (self.last_update)))
 			
 			show = list()
@@ -490,11 +562,53 @@ OPTIONAL ARGUMENTS:
 			return True
 		
 		except urllib2.URLError as inst:
+			self.network_lock.release ()
+			self.lock.acquire ()
+			try:
+				# urllib2 only has one error class URLError, so if it's not an HTTP error,
+				# this won't be defined, ugh...
+				error = inst.getcode ()
+			except AttributeError:
+				error = 0
+			if error == 401:
+				# HTTP 401 -- Unauthorized
+				if self.onAuthenticationError:
+					self.auth_error = True
+					if self.auth_error_running:
+						# Another thread is currently calling the onAuthenticationError callback
+						self.lock.release ()
+						self.logger.debug ('Found auth_error_running == True, suppressing this one')
+						return False
+					self.logger.debug ('Authentication error -- invoking callback')
+					self.auth_error_running = True
+					copy = threading.local()
+					copy.onAuthenticationError = self.onAuthenticationError
+					copy.onAuthenticationErrorArgs = self.onAuthenticationErrorArgs
+					self.lock.release ()
+					try:
+						copy.onAuthenticationError (copy.onAuthenticationErrorArgs, self)
+						self.lock.acquire ()
+						self.auth_error_running = False
+						self.lock.release ()
+					except TypeError as e:
+						# Don't mask TypeErrors in callback
+						# XXX: This feels like a hack, there must be a better way to do this...
+						if 'takes exactly' in e.args[0]:
+							logger.debug ('onAuthenticationError re-called w/out gConn')
+							copy.onAuthenticationError (copy.onAuthenticationErrorArgs)
+							self.lock.acquire ()
+							self.auth_error_running = False
+							self.lock.release ()
+						else:
+							raise
+				else:
+					self.logger.debug ('Authentication error -- No callback defined, raising error')
+					self.lock.release ()
+					raise self.AuthenticationError
+				return False
 			# This is almost certainly a transient error, likely due to a lost connection, we don't really care
 			# we'll just try to update again in a minute and keep polling until we can actually connect again.
 			self.logger.info ("urllib Error: " + str(inst) + " (ignored)")
-			self.network_lock.release ()
-			self.lock.acquire ()
 			if (time() - self.last_update) > self.disconnect_threshold:
 				self.logger.info ('Disconnected! (last_update: ' + asctime (localtime (self.last_update)) + ')')
 				copy = threading.local ()

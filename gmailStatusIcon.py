@@ -6,12 +6,14 @@ import gtk
 TRAY_NOCONN = 'noconnection.png'
 TRAY_NOMAIL = 'nomail.png'
 TRAY_NEWMAIL = 'newmail.png'
+TRAY_AUTHERR = 'noconnection.png'
 
 class GmailStatusIcon(gtk.StatusIcon):
 
 	TRAY_NOCONN = TRAY_NOCONN
 	TRAY_NOMAIL = TRAY_NOMAIL
 	TRAY_NEWMAIL = TRAY_NEWMAIL
+	TRAY_AUTHERR = TRAY_AUTHERR
 
 	def __init__(self, on_update, on_tellMe, on_preferences, on_about, on_close, args=None):
 		gtk.StatusIcon.__init__(self)

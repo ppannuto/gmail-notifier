@@ -1,8 +1,15 @@
 import gtk
+import logging
+import threading
 
 class NotifierConfigWindow:
 
-	def __init__(self, username=None, password=None):
+	def __init__(self, username=None, password=None, log_level=logging.WARNING):
+		# Set up logging
+		logging.basicConfig (level=log_level, format="%(asctime)s [%(levelname)s]\t{%(thread)s} %(name)s:%(lineno)d %(message)s")
+		self.logger = logging.getLogger ('configWindow')
+		self.logger.debug ('starting NotifierConfigWindow')
+
 		# Copy in default arguments
 		self.username = username
 		self.password = password
@@ -22,6 +29,7 @@ class NotifierConfigWindow:
 		# Create and attach widgets for username/password
 		self.username_label = gtk.Label ('username')
 		self.username_entry = gtk.Entry ()
+		self.username_entry.connect ('activate', self.onClose)
 		if username:
 			self.username_entry.set_text (username)
 		self.table.attach (self.username_label, 0, 1, 0, 1, xpadding=2, ypadding=2)
@@ -31,6 +39,7 @@ class NotifierConfigWindow:
 
 		self.password_label = gtk.Label ('password')
 		self.password_entry = gtk.Entry ()
+		self.password_entry.connect ('activate', self.onClose)
 		self.password_entry.set_visibility (False)
 		if password:
 			self.password_entry.set_text (password)
@@ -66,15 +75,18 @@ class NotifierConfigWindow:
 		# Add top container to window
 		self.window.add (self.vbox)
 
+		# Have an event for window destruction
+		self.destroy_event = threading.Event ()
+#		self.window.connect ('destroy-event', self.onDestroy)
+
 		# Show everything
 		self.table.show ()
 		self.hbox.show ()
 		self.vbox.show ()
 
 		self.window.show()
-
-		# BAM!
-		gtk.main()
+		
+		self.logger.debug ('NotifierConfigWindow __init__ complete')
 
 	def onToggle(self, widget, user_params=None):
 		if widget.get_active ():
@@ -83,23 +95,32 @@ class NotifierConfigWindow:
 			self.password_entry.set_visibility (False)
 
 	def onDelete(self, widget, user_params=None):
-		gtk.main_quit ()
-		self.window.hide ()
-		return True
+		self.window.destroy ()
+		self.destroy_event.set ()
 
 	def onClose(self, widget, user_params=None):
 		self.username = self.username_entry.get_text ()
 		self.password = self.password_entry.get_text ()
 
 		if self.username == '' or self.password == '':
+			gtk.gdk.threads_enter ()
 			dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK, type=gtk.MESSAGE_ERROR)
 			dialog.set_position (gtk.WIN_POS_CENTER)
-			dialog.set_markup ('Both username and password are required!')
+			dialog.set_markup ('Error!\n\nBoth username and password are required!')
 			dialog.run ()
 			dialog.destroy ()
+			gtk.gdk.threads_leave ()
 			return False
 
 		self.onDelete (widget, user_params)
 
 	def onCancel(self, widget, user_params=None):
+		self.username = ''
+		self.password = ''
 		self.onDelete (widget, user_params)
+
+	def onDestroy(self, widget, user_params=None):
+		self.destroy_event.set ()
+
+	def wait(self, timeout=None):
+		self.destroy_event.wait (timeout=timeout)
