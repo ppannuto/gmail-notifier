@@ -51,8 +51,8 @@ def on_close(entry, user_params=None):
 	exit (0)
 
 
-def onNewMail(status_icon, emails, gConn):
-	logger.debug ('onNewMail called')
+def onUpdate(gConn, status_icon):
+	logger.debug ('onUpdate called')
 	gtk.gdk.threads_enter ()
 	if gConn.getUnreadMessageCount (update=False):
 		status_icon.set_from_file (gmailStatusIcon.TRAY_NEWMAIL)
@@ -63,14 +63,14 @@ def onNewMail(status_icon, emails, gConn):
 		status_icon.set_tooltip ('Gmail Notifier -- You have no unread messages')
 	gtk.gdk.threads_leave ()
 
-def onDisconnect(status_icon):
+def onDisconnect(gConn, status_icon):
 	logger.debug ('onDisconnect called')
 	gtk.gdk.threads_enter ()
 	status_icon.set_from_file (gmailStatusIcon.TRAY_NOCONN)
 	status_icon.set_tooltip ('Gmail Notifier -- Not Connected')
 	gtk.gdk.threads_leave ()
 
-def onAuthenticationError(status_icon, gConn):
+def onAuthenticationError(gConn, status_icon):
 	logger.debug ('onAuthenticationError called')
 	gtk.gdk.threads_enter ()
 	status_icon.set_from_file (gmailStatusIcon.TRAY_AUTHERR)
@@ -150,7 +150,7 @@ def main():
 	gtk.gdk.threads_leave ()
 	logger.debug ('status icon initialized')
 
-	gConn.set_onNewMail (onNewMail, status_icon)
+	gConn.set_onUpdate (onUpdate, status_icon)
 	gConn.set_onDisconnect (onDisconnect, status_icon)
 	gConn.set_onAuthenticationError (onAuthenticationError, status_icon)
 	gConn.start ()

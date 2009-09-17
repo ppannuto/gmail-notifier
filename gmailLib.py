@@ -183,6 +183,10 @@ OPTIONAL ARGUMENTS:
 	start=False
 		Identical to calling gConn.start
 
+	onUpdate=None, also GmailConn.set_onUpdate
+	onUpdateArgs=None
+		Sets the callback function (and args to pass), see GmailConn.set_onUpdate
+
 	onNewMail=None, also GmailConn.set_onNewMail
 	onNewMailArgs=None
 		Sets the callback function (and args to pass), see GmailConn.set_onNewMail
@@ -257,6 +261,8 @@ OPTIONAL ARGUMENTS:
 			username,
 			password,
 			proxy=None,
+			onUpdate=None,
+			onUpdateArgs=None,
 			onNewMail=None,
 			onNewMailArgs=None,
 			onDisconnect=None,
@@ -281,6 +287,9 @@ OPTIONAL ARGUMENTS:
 			if not pynotify.init ('Gmail Notifier 2'):
 				self.logger.critical ("Error loading / initializing pynotify module")
 				raise ImportError
+		
+		self.onUpdate = onUpdate
+		self.onUpdateArgs = onUpdateArgs
 		
 		self.onNewMail = onNewMail
 		self.onNewMailArgs = onNewMailArgs
@@ -334,16 +343,31 @@ OPTIONAL ARGUMENTS:
 		self.lock.release()
 		self.logger.debug ('updater thread spawned successfully')
 
+	def set_onUpdate(self, onUpdate, onUpdateArgs=None):
+		"""Sets the onUpdate callback.  This function is called whenever the GMail atom feed it updated.  This is
+		at the discretion of _Google_.  The feed contains a 'modified' field, and this function is called any time
+		that this field is changed.
+		def onUpdate(gConn, onUpdateArgs)
+			gConn		-- A refrence to the calling object. Note: It is _recommended_, but not required that
+					   any calls to this object's get* methods use Update=False, otherwise, you may end
+					   up triggering an update, which will call this method again...
+			onUpdateArgs	-- Arguments supplied here will be passed to the callback
+		
+		*** This callback is called _whenever_ gConn determines there are 'new' unread emails.  It may be called from
+		the updater thread OR from a call to gConn.get* with Update=None or Update=True ***
+		"""
+		self.lock.acquire ()
+		self.onUpdate = onUpdate
+		self.onUpdateArgs = onUpdateArgs
+		self.lock.release ()
+
 	def set_onNewMail(self, onNewMail, onNewMailArgs=None):
 		"""Sets the onNewMail callback.  This function is called whenever a 'new' unread email is recieved.
-		def onNewMail(onNewMailArgs, newEmails, [gConn])
-			onNewMailArgs	-- Arguments supplied here will be passed to the callback
+		def onNewMail(gConn, newEmails, onNewMailArgs)
+			gConn		-- A refrence to the calling object. See the warning in set_onUpdate
 			newEmails	-- A list of emails that have not been _shown_ to the caller before. This means if there are
 					   3 unread emails, and a 4th arrives, you will only get ONE email (the newest) in this argument
-			[gConn]		-- You may optionally accept this argument (the library try:'s with it, excepts the TypeError,
-					   and calls again without it), it is a reference to the gConn that made the call. Use this
-					   object to access all emails or other information stored in gConn. It is recommended, but
-					   not required that you set Update=False in each call to this object
+			onNewMailArgs	-- Arguments supplied here will be passed to the callback
 
 		*** This callback is called _whenever_ gConn determines there are 'new' unread emails.  It may be called from
 		the updater thread OR from a call to gConn.get* with Update=None or Update=True ***
@@ -356,8 +380,8 @@ OPTIONAL ARGUMENTS:
 	def set_onDisconnect(self, onDisconnect, onDisconnectArgs=None):
 		"""Sets the onDisconnect callback.  Called whenever time.time() - gConn.last_update > gConn.disconnect_threshold.
 		def onDisconnect(onDisconnectArgs, [gConn])
+			gConn			-- A reference to the calling object. See the warning in set_onUpdate
 			onDisconnectArgs	-- Arguments supplied here will be passed to the callback
-			[gConn]			-- (see set_onNewMail)
 
 		*** This callback is called _whenever_ gConn determines it is disconnected.  It may be called from
 		the updater thread OR from a call to gConn.get* with Update=None or Update=True ***
@@ -372,8 +396,8 @@ OPTIONAL ARGUMENTS:
 		a gConn object will first attempt to call this function. If it is not defined, an AuthenticationError will be raised
 
 		def onAuthenticationError(onAuthenticationError, [gConn])
+			gConn			-- A reference to the calling object. See the warning in set_onUpdate
 			onAuthenticationErrorArgs	-- Arguments supplied here will be passed to the callback
-			[gConn]				-- (see set_onNewMail)
 
 		Note: If you application daemonizes gConn (that is, calls start), you _must_ implement this method, otherwise
 		the uncaught AuthenticationError will simply kill off the 'updater' thread
@@ -531,34 +555,30 @@ OPTIONAL ARGUMENTS:
 			for email in self.xml_parser.emails:
 				if email.id not in self.shown:
 					self.shown.append (email.id)
-					show.append (email.dict())
+					show.append (email.dict ())
+
+			if len (show):
+				assert self.getUnreadMessageCount (False)
 			
 			if len (show) and self.notifications:
 				self.notify (show)
+
+			if len (show) and self.onNewMail:
+				copy = threading.local ()
+				copy.show = show
+				copy.onNewMail = self.onNewMail
+				copy.onNewMailArgs = self.onNewMailArgs
+				copy.onNewMail (self, copy.show, copy.onNewMailArgs)
 			
 			if self.last_modified != self.xml_parser.modified:
 				self.last_modified = self.xml_parser.modified
-				if self.onNewMail:
-					copy = threading.local()
-					copy.show = show
-					copy.onNewMail = self.onNewMail
-					copy.onNewMailArgs = self.onNewMailArgs
-					self.lock.release ()
-					try:
-						copy.onNewMail (copy.onNewMailArgs, copy.show, self)
-					except TypeError as e:
-						# Don't mask TypeErrors in callback
-						# XXX: This feels like a hack, there must be a better way to do this...
-						if 'takes exactly' in e.args[0]:
-							copy.onNewMail (copy.onNewMailArgs, copy.show)
-						else:
-							raise
-				else:
-					self.lock.release ()
-			else:
-				self.last_modified = self.xml_parser.modified
-				self.lock.release ()
+				if self.onUpdate:
+					copy = threading.local ()
+					copy.onUpdate = self.onUpdate
+					copy.onUpdateArgs = self.onUpdateArgs
+					copy.onUpdate (self, copy.onUpdateArgs)
 			
+			self.lock.release ()
 			return True
 		
 		except urllib2.URLError as inst:
@@ -584,23 +604,9 @@ OPTIONAL ARGUMENTS:
 					copy = threading.local()
 					copy.onAuthenticationError = self.onAuthenticationError
 					copy.onAuthenticationErrorArgs = self.onAuthenticationErrorArgs
+					copy.onAuthenticationError (self, copy.onAuthenticationErrorArgs)
+					self.auth_error_running = False
 					self.lock.release ()
-					try:
-						copy.onAuthenticationError (copy.onAuthenticationErrorArgs, self)
-						self.lock.acquire ()
-						self.auth_error_running = False
-						self.lock.release ()
-					except TypeError as e:
-						# Don't mask TypeErrors in callback
-						# XXX: This feels like a hack, there must be a better way to do this...
-						if 'takes exactly' in e.args[0]:
-							logger.debug ('onAuthenticationError re-called w/out gConn')
-							copy.onAuthenticationError (copy.onAuthenticationErrorArgs)
-							self.lock.acquire ()
-							self.auth_error_running = False
-							self.lock.release ()
-						else:
-							raise
 				else:
 					self.logger.debug ('Authentication error -- No callback defined, raising error')
 					self.lock.release ()
@@ -614,18 +620,9 @@ OPTIONAL ARGUMENTS:
 				copy = threading.local ()
 				copy.onDisconnect = self.onDisconnect
 				copy.onDisconnectArgs = self.onDisconnectArgs
-				self.lock.release ()
-				try:
-					copy.onDisconnect (copy.onDisconnectArgs, self)
-				except TypeError as e:
-					# Don't mask TypeErrors in callback
-					# XXX: This feels like a hack, there must be a better way to do this...
-					if 'takes exactly' in e.args[0]:
-						copy.onDisconnect (copy.onDisconnectArgs)
-					else:
-						raise
-			else:
-				self.lock.release ()
+				copy.onDisconnect (self, copy.onDisconnectArgs)
+			
+			self.lock.release ()
 			return False
 
 	def u(self, update, use_disconnect_threshold=False):
@@ -667,11 +664,7 @@ OPTIONAL ARGUMENTS:
 		locals = threading.local ()
 		self.u (update)
 		self.lock.acquire ()
-		if self.xml_parser.email_count != len(self.xml_parser.emails):
-			self.logger.debug ("email_count: " + str (self.xml_parser.email_count))
-			self.logger.debug ("len(emails): " + str (len (self.xml_parser.emails)))
-			self.lock.release ()
-			raise self.ParseError ("email_count did not match len(emails)")
+		assert self.xml_parser.email_count == len(self.xml_parser.emails)
 		locals.ret = self.xml_parser.email_count
 		self.lock.release ()
 		return locals.ret
