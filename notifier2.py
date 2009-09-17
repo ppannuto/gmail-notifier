@@ -85,6 +85,22 @@ def onAuthenticationError(gConn, status_icon):
 	preferences (gConn=gConn)
 
 
+def onPowerChange():
+	print 'power change'
+
+
+def PowerThread(dev, gConn):
+	from time import sleep
+	while True:
+		if dev.GetProperty ('ac_adapter.present'):
+			logger.debug ('POWER: ac adapter present')
+			gConn.set_frequency ()
+		else:
+			logger.debug ('POWER: on battery')
+			gConn.set_frequency (60)
+		sleep (60)
+
+
 def preferences_thread(entry=None, gConn=None, gtk_locked=False):
 	logger.debug ('preferences called (gConn: ' + str(gConn) + ')')
 	Keyring = keyring.Keyring ('gmail-notifier2', 'mail.google.com', 'https')
@@ -150,11 +166,32 @@ def main():
 	gtk.gdk.threads_leave ()
 	logger.debug ('status icon initialized')
 
+	#Create and start a gConn object to communicate with GMail
 	gConn.set_onUpdate (onUpdate, status_icon)
 	gConn.set_onDisconnect (onDisconnect, status_icon)
 	gConn.set_onAuthenticationError (onAuthenticationError, status_icon)
 	gConn.start ()
 	logger.debug ('gConn start()ed')
+
+	#Try to hook into dbus so we can monitor power state
+	try:
+		import dbus
+		from dbus.mainloop.glib import DBusGMainLoop
+		from dbus.mainloop.glib import threads_init as dbus_threads_init
+		dbus_threads_init ()
+		DBusGMainLoop (set_as_default=True)
+
+		bus = dbus.SystemBus ()
+		hal_obj = bus.get_object ('org.freedesktop.Hal', '/org/freedesktop/Hal/Manager')
+		hal = dbus.Interface (hal_obj, 'org.freedesktop.Hal.Manager')
+		
+		dev_obj = bus.get_object ("org.freedesktop.Hal", hal.FindDeviceByCapability ("ac_adapter")[0])
+		dev = dbus.Interface (dev_obj, "org.freedesktop.Hal.Device")
+		dev.connect_to_signal ("PropertyModified", onPowerChange)
+
+		threading.Thread (target=PowerThread, args=(dev, gConn)).start ()
+	except ImportError:
+		pass
 
 	gtk.gdk.threads_enter ()
 	gtk.main ()
