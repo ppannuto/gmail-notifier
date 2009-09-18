@@ -25,7 +25,7 @@ import notifierConfig
 def on_update(entry, gConn):
 	logger.debug ('on_update clicked')
 	try:
-		gConn.isConnected (update=True)
+		gConn.update (async=True)
 	except gConn.Error:
 		pass
 
@@ -85,8 +85,10 @@ def onAuthenticationError(gConn, status_icon):
 	preferences (gConn=gConn)
 
 
-def onPowerChange():
+def onPowerChange(args, kwargs):
 	print 'power change'
+	print '  args: ' + str(args)
+	print 'kwargs: ' + str(kwargs)
 
 
 def PowerThread(dev, gConn):

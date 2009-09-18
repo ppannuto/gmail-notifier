@@ -463,7 +463,7 @@ OPTIONAL ARGUMENTS:
 		the notification engine to show an update for a subset of emails. Otherwise the cached email list will be used. The
 		emails argument is assumed to be sorted such that the newest email is emails[0].
 
-		If check_connectd=True, the notification engine will prepend a warning to the notification if isConnected() returns False
+		If check_connectd=True, the notification engine will prepend a warning to the notification if isConnected returns False
 		
 		Note: This function will not automatically update the internal email list
 		
@@ -635,14 +635,15 @@ OPTIONAL ARGUMENTS:
 			return True
 		
 		self.lock.acquire ()
-		locals = threading.local ()
-		locals.compare = (self.frequency, self.disconnect_threshold)[use_disconnect_threshold]
-		self.lock.release ()
-		if (time () - self.last_update) > locals.compare:
+		compare = (self.frequency, self.disconnect_threshold)[use_disconnect_threshold]
+		if (time () - self.last_update) > compare:
+			self.lock.release ()
 			if update == False:
 				return False
 			return self.refreshInfo ()
-		return True
+		else:
+			self.lock.release ()
+			return True
 
 	def isConnected(self, update=None):
 		"""Call this method to establish if the gConn object believes itself to be connected. This is currently
