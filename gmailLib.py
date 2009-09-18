@@ -425,19 +425,22 @@ OPTIONAL ARGUMENTS:
 		self.logger.setLevel (logLevel)
 		self.lock.release ()
 
-	def update(self, async=False):
+	def update(self, async=False, force_callbacks=False):
 		"""Force an update. If the async parameter is True, a one-off thread will be spawned to try to update. Otherwise,
 		this function will block until the update is complete.
+
+		The force_callbacks parameter will cause onUpdate or onDisconnect (whichever is appropriate) during this update,
+		regardless of whether it would have otherwise been called.
 		
 		Note: If an async update fails for any reason, you will not recieve any indication (except perhaps
 		onAuthenticationError), but any other transient error will be lost.
 		"""
 		if async:
-			t = threading.Thread (target=self.refreshInfo)
+			t = threading.Thread (target=self.refreshInfo, args=(force_callbacks,))
 			t.daemon = True
 			t.start ()
 		else:
-			return self.refreshInfo ()
+			return self.refreshInfo (force_callbacks)
 
 	def updater(self):
 		"""Internal -- There is no reason to call this directly"""
@@ -538,7 +541,7 @@ OPTIONAL ARGUMENTS:
 		return urllib2.urlopen(self.url, timeout=10)
 #		return open('feed.xml', 'r')
 
-	def refreshInfo(self):
+	def refreshInfo(self, force_callbacks=False):
 		"""Internal -- There is no reason to call this directly"""
 		# get the page and parse it
 		self.network_lock.acquire ()
@@ -571,7 +574,7 @@ OPTIONAL ARGUMENTS:
 				copy.onNewMailArgs = self.onNewMailArgs
 				copy.onNewMail (self, copy.show, copy.onNewMailArgs)
 			
-			if self.last_modified != self.xml_parser.modified or self.disconnected:
+			if self.last_modified != self.xml_parser.modified or self.disconnected or force_callbacks:
 				self.last_modified = self.xml_parser.modified
 				self.disconnected = False
 				if self.onUpdate:
@@ -617,7 +620,7 @@ OPTIONAL ARGUMENTS:
 			# This is almost certainly a transient error, likely due to a lost connection, we don't really care
 			# we'll just try to update again in a minute and keep polling until we can actually connect again.
 			self.logger.info ("urllib Error: " + str(inst) + " (ignored)")
-			if (time() - self.last_update) > self.disconnect_threshold:
+			if (time() - self.last_update) > self.disconnect_threshold or force_callbacks:
 				self.logger.info ('Disconnected! (last_update: ' + asctime (localtime (self.last_update)) + ')')
 				self.disconnected = True
 				copy = threading.local ()

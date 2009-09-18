@@ -25,7 +25,7 @@ import notifierConfig
 def on_update(entry, gConn):
 	logger.debug ('on_update clicked')
 	try:
-		gConn.update (async=True)
+		gConn.update (async=True, force_callbacks=True)
 	except gConn.Error:
 		pass
 
