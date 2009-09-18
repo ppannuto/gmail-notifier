@@ -311,6 +311,7 @@ OPTIONAL ARGUMENTS:
 		self.auth_error = False
 		self.auth_error_running = False
 		self.last_modified = 0
+		self.disconnected = True
 		
 		# Add @gmail.com if the caller didn't
 		if (username.rfind("@gmail.com")) == -1:
@@ -570,8 +571,9 @@ OPTIONAL ARGUMENTS:
 				copy.onNewMailArgs = self.onNewMailArgs
 				copy.onNewMail (self, copy.show, copy.onNewMailArgs)
 			
-			if self.last_modified != self.xml_parser.modified:
+			if self.last_modified != self.xml_parser.modified or self.disconnected:
 				self.last_modified = self.xml_parser.modified
+				self.disconnected = False
 				if self.onUpdate:
 					copy = threading.local ()
 					copy.onUpdate = self.onUpdate
@@ -617,6 +619,7 @@ OPTIONAL ARGUMENTS:
 			self.logger.info ("urllib Error: " + str(inst) + " (ignored)")
 			if (time() - self.last_update) > self.disconnect_threshold:
 				self.logger.info ('Disconnected! (last_update: ' + asctime (localtime (self.last_update)) + ')')
+				self.disconnected = True
 				copy = threading.local ()
 				copy.onDisconnect = self.onDisconnect
 				copy.onDisconnectArgs = self.onDisconnectArgs
