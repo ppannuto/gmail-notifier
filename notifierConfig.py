@@ -39,7 +39,7 @@ class NotifierConfigWindow:
 		self.table = gtk.Table (rows=2, columns=2)
 
 		# Create and attach widgets for username/password
-		self.username_label = gtk.Label ('username')
+		self.username_label = gtk.Label ('Username')
 		self.username_entry = gtk.Entry ()
 		self.username_entry.connect ('activate', self.onClose)
 		if username:
@@ -49,12 +49,13 @@ class NotifierConfigWindow:
 		self.username_label.show ()
 		self.username_entry.show ()
 
-		self.password_label = gtk.Label ('password')
+		self.password_label = gtk.Label ('Password')
 		self.password_entry = gtk.Entry ()
 		self.password_entry.connect ('activate', self.onClose)
 		self.password_entry.set_visibility (False)
-		if password:
-			self.password_entry.set_text (password)
+#Don't expose stored password
+#		if password:
+#			self.password_entry.set_text (password)
 		self.table.attach (self.password_label, 0, 1, 1, 2, xpadding=2, ypadding=2)
 		self.table.attach (self.password_entry, 1, 2, 1, 2, xpadding=2, ypadding=2)
 		self.password_label.show()
