@@ -86,7 +86,7 @@ class NotifierConfigWindow:
 				print ('configureAccount with username ' + username + ' called')
 				for gConn in self.gConns:
 					if gConn.getUsername () == username:
-						gConn.configure (config)
+						gConn.configure (self.config)
 			else:
 				print ('configureAccount with username=None called')
 				try:

@@ -61,7 +61,7 @@ class GmailConfigWindow():
 		self.window_vbox = self.window.get_content_area ()
 
 		# Add a table to align configuration options nicely
-		self.table = gtk.Table (rows=6, columns=2)
+		self.table = gtk.Table (rows=2, columns=2)
 		self.window_vbox.pack_start (self.table)
 		self.table.show ()
 
@@ -90,6 +90,15 @@ class GmailConfigWindow():
 		self.table.attach (self.show_password_checkbutton, 1, 2, 2, 3)
 		self.show_password_checkbutton.show ()
 
+		#Call the rest of the options 'advanced' and put them in an expander
+		self.expander = gtk.Expander ('Advanced')
+		self.window_vbox.pack_start (self.expander)
+		self.expander.show ()
+
+		self.expander_table = gtk.Table (rows=4, columns=2)
+		self.expander.add (self.expander_table)
+		self.expander_table.show ()
+
 		self.proxy_label = gtk.Label ('Proxy')
 		self.proxy_entry = gtk.Entry ()
 		self.proxy_entry.connect ('activate', self.onClose)
@@ -97,8 +106,8 @@ class GmailConfigWindow():
 			self.proxy_entry.set_text (self.config.get (username, 'proxy'))
 		except ConfigParser.Error:
 			pass
-		self.table.attach (self.proxy_label, 0, 1, 3, 4)
-		self.table.attach (self.proxy_entry, 1, 2, 3, 4)
+		self.expander_table.attach (self.proxy_label, 0, 1, 0, 1)
+		self.expander_table.attach (self.proxy_entry, 1, 2, 0, 1)
 		self.proxy_label.show ()
 		self.proxy_entry.show ()
 
@@ -111,8 +120,8 @@ class GmailConfigWindow():
 			self.ac_polling_entry.set_value (self.config.getint (username, 'ac_polling'))
 		except ConfigParser.Error:
 			self.ac_polling_entry.set_value (self.DEFAULT_AC_POLL)
-		self.table.attach (self.ac_polling_label, 0, 1, 4, 5)
-		self.table.attach (self.ac_polling_entry, 1, 2, 4, 5)
+		self.expander_table.attach (self.ac_polling_label, 0, 1, 1, 2)
+		self.expander_table.attach (self.ac_polling_entry, 1, 2, 1, 2)
 		self.ac_polling_label.show ()
 		self.ac_polling_entry.show ()
 
@@ -125,8 +134,8 @@ class GmailConfigWindow():
 			self.battery_polling_entry.set_value (self.config.getint (username, 'battery_polling'))
 		except ConfigParser.Error:
 			self.battery_polling_entry.set_value (self.DEFAULT_BATTERY_POLL)
-		self.table.attach (self.battery_polling_label, 0, 1, 5, 6)
-		self.table.attach (self.battery_polling_entry, 1, 2, 5, 6)
+		self.expander_table.attach (self.battery_polling_label, 0, 1, 2, 3)
+		self.expander_table.attach (self.battery_polling_entry, 1, 2, 2, 3)
 		self.battery_polling_label.show ()
 		self.battery_polling_entry.show ()
 
