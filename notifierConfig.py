@@ -1,10 +1,106 @@
+import os
 import gtk
 import logging
 import threading
-
-module_lock = threading.Lock ()
+import ConfigParser
+from gmailLib import GmailConn
 
 class NotifierConfigWindow:
+
+	def __init__(self, config, gConns):
+		self.close_event = threading.Event ()
+		self.buildWindow (config, gConns)
+		gtk.main ()
+
+	def buildWindow(self, config, gConns):
+		# Set up the top-level window
+		self.window = gtk.Window ()
+		self.window.set_title ('GMail Notifier Preferences')
+		self.window.set_position (gtk.WIN_POS_CENTER)
+
+		# Add a vbox to hold the window contents
+		self.window_vbox = gtk.VBox ()
+		self.window.add (self.window_vbox)
+
+		# Add instructions (Label) at the top of the window
+		self.top_label = gtk.Label ('Add, remove, and configure GMail accounts')
+		self.window_vbox.pack_start (self.top_label)
+
+		# Add a table to hold all of the account buttons
+		self.accounts_table = gtk.Table (rows=1, columns=3)
+		self.window_vbox.pack_start (self.accounts_table)
+
+		# Create widgets for each email account and pack them into the table
+		self.accounts = list()
+		rows = 0
+		for username in config.sections ():
+			rows += 1
+			self.accounts_table.resize (rows=rows, columns=3)
+			self.accounts.append (  (gtk.Label (), gtk.Button (stock=gtk.STOCK_PREFERENCES), gtk.Button (stock=gtk.STOCK_DELETE))  )
+			# Label
+			self.accounts[-1][0].set_text (username)
+			alignment = gtk.Alignment (xalign=0)
+			alignment.add (self.accounts[-1][0])
+			self.accounts_table.attach (alignment, 0, 1, rows-1, rows)
+			# Configure Button
+			self.accounts[-1][1].set_label ('Configure')
+			self.accounts[-1][1].connect ('clicked', self.configureAccount, config, gConns, username)
+			alignment = gtk.Alignment (xalign=1)
+			alignment.add (self.accounts[-1][1])
+			self.accounts_table.attach (alignment, 1, 2, rows-1, rows)
+			# Delete Button
+			self.accounts[-1][2].connect ('clicked', self.deleteAccount, config, gConns, username)
+			alignment = gtk.Alignment (xalign=1)
+			alignment.add (self.accounts[-1][2])
+			self.accounts_table.attach (alignment, 2, 3, rows-1, rows)
+
+		# 'Add new account' button
+		self.new_account_button = gtk.Button (stock=gtk.STOCK_ADD, label="_Add a new account...")
+		self.new_account_button.set_label ('_Add a new account...')
+		self.new_account_button.connect ('clicked', self.configureAccount, config, gConns)
+		alignment = gtk.Alignment (xalign=1.0)
+		alignment.add (self.new_account_button)
+		self.window_vbox.pack_start (alignment)
+
+		# Close window button
+		self.close_button = gtk.Button (stock=gtk.STOCK_CLOSE)
+		self.close_button.connect ('clicked', self.onDelete, config, gConns)
+		self.window_vbox.pack_start (self.close_button)
+
+		self.close_event.clear ()
+		self.window.show_all ()
+
+	def configureAccount(self, widget, config, gConns, username=None):
+		if username:
+			print ('configureAccount with username ' + username + ' called')
+			for gConn in gConns:
+				if gConn.getUsername () == username:
+					gConn.configure (config)
+		else:
+			print ('configureAccount with username=None called')
+			try:
+				gConns.append (GmailConn (config=config))
+			except GmailConn.CancelledError:
+				print ('configureAccount new account creation cancelled')
+		self.buildWindow (config, gConns)
+		print ('configureAccount complete')
+
+
+	def deleteAccount(self, widget, config, gConns, username):
+		config.remove_section (username)
+
+	def onDelete(self, widget, config, gConns):
+		# XXX
+		config.write (open (os.path.expanduser ('~/.gmail-notifier.conf'), 'w'))
+		self.window.destroy ()
+		self.close_event.set ()
+
+
+class NotifierConfig:
+	"""A configuration object for gmail-notifier. The constructor takes a list of config files.  This object is
+	reentrant, and as a consequence may block.  If you need non-blocking access, wrap your any access to the
+	config object with try_lock/release_lock (but only if try_lock returned True!)
+	"""
 
 	class Error(Exception):
 		pass
@@ -12,126 +108,47 @@ class NotifierConfigWindow:
 	class AlreadyRunningError(Error):
 		pass
 
-	def __init__(self, username=None, password=None, log_level=logging.WARNING):
-		# We only allow one instance to run at a time
-		if not module_lock.acquire (False):
-			raise self.AlreadyRunningError
+	def __init__(self, files):
+		self.lock = threading.RLock ()
+		self.readConfigFiles (files)
 
-		# Set up logging
-		logging.basicConfig (level=log_level, format="%(asctime)s [%(levelname)s]\t{%(thread)s} %(name)s:%(lineno)d %(message)s")
-		self.logger = logging.getLogger ('configWindow')
-		self.logger.debug ('starting NotifierConfigWindow')
+	def try_lock(self, blocking=0):
+		return self.lock.acquire (blocking)
 
-		# Copy in default arguments
-		self.username = username
-		self.password = password
+	def release_lock(self):
+		self.lock.release ()
 
-		# Set up a main window
-		self.window = gtk.Window (gtk.WINDOW_TOPLEVEL)
-		self.window.set_title ('Gmail Notifier Preferences')
-		self.window.set_position (gtk.WIN_POS_CENTER)
-		self.window.set_modal (True)
+	def readConfigFiles(self, files):
+		with self.lock:
+			self.config = ConfigParser.SafeConfigParser ()
+			self.config.read (files)
 
-		# Register events
-		self.window.connect ('delete_event', self.onDelete)
+	def showConfigWindow(self, gConns, gConns_lock):
+		print 'a'
+		with self.lock:
+			print 'b'
+			with gConns_lock:
+				print 'c'
+				gtk.gdk.threads_enter ()
+				print 'd'
+				n = NotifierConfigWindow (self.config, gConns)
+				print 'e'
+				gtk.gdk.threads_leave ()
+				print 'f'
+				n.close_event.wait ()
 
-		# Create a table for window
-		self.table = gtk.Table (rows=2, columns=2)
+	def get_usernames(self):
+		with self.lock:
+			return self.config.sections ()
 
-		# Create and attach widgets for username/password
-		self.username_label = gtk.Label ('Username')
-		self.username_entry = gtk.Entry ()
-		self.username_entry.connect ('activate', self.onClose)
-		if username:
-			self.username_entry.set_text (username)
-		self.table.attach (self.username_label, 0, 1, 0, 1, xpadding=2, ypadding=2)
-		self.table.attach (self.username_entry, 1, 2, 0, 1, xpadding=2, ypadding=2)
-		self.username_label.show ()
-		self.username_entry.show ()
+	def get_password(self, username):
+		with self.lock:
+			return self.config.get (username, 'password')
 
-		self.password_label = gtk.Label ('Password')
-		self.password_entry = gtk.Entry ()
-		self.password_entry.connect ('activate', self.onClose)
-		self.password_entry.set_visibility (False)
-#Don't expose stored password
-#		if password:
-#			self.password_entry.set_text (password)
-		self.table.attach (self.password_label, 0, 1, 1, 2, xpadding=2, ypadding=2)
-		self.table.attach (self.password_entry, 1, 2, 1, 2, xpadding=2, ypadding=2)
-		self.password_label.show()
-		self.password_entry.show()
+	def get_ac_polling(self, username):
+		with self.lock:
+			return self.config.getint (username, 'ac_polling')
 
-		self.show_password_checkbutton = gtk.CheckButton ('Show Password')
-		self.show_password_checkbutton.active = False
-		self.show_password_checkbutton.connect ('toggled', self.onToggle)
-		self.table.attach (self.show_password_checkbutton, 1, 2, 2, 3, xpadding=2, ypadding=2)
-		self.show_password_checkbutton.show()
-
-		# Create an hbox to hold Cancel/Close buttons
-		self.hbox = gtk.HBox ()
-
-		self.cancel_button = gtk.Button (stock=gtk.STOCK_CANCEL)
-		self.hbox.pack_start (self.cancel_button)
-		self.cancel_button.connect ('clicked', self.onCancel)
-		self.cancel_button.show ()
-
-		self.close_button = gtk.Button (stock=gtk.STOCK_CLOSE)
-		self.hbox.pack_start (self.close_button)
-		self.close_button.connect ('clicked', self.onClose)
-		self.close_button.show ()
-
-		# Create a vbox to hold the table/hbox
-		self.vbox = gtk.VBox ()
-		self.vbox.pack_start (self.table, padding=10)
-		self.vbox.pack_start (self.hbox)
-
-		# Add top container to window
-		self.window.add (self.vbox)
-
-		# Have an event for window destruction
-		self.destroy_event = threading.Event ()
-#		self.window.connect ('destroy-event', self.onDestroy)
-
-		# Show everything
-		self.table.show ()
-		self.hbox.show ()
-		self.vbox.show ()
-
-		self.window.show()
-		
-		self.logger.debug ('NotifierConfigWindow __init__ complete')
-
-	def onToggle(self, widget, user_params=None):
-		if widget.get_active ():
-			self.password_entry.set_visibility (True)
-		else:
-			self.password_entry.set_visibility (False)
-
-	def onDelete(self, widget, user_params=None):
-		self.window.destroy ()
-		module_lock.release ()
-		self.destroy_event.set ()
-
-	def onClose(self, widget, user_params=None):
-		self.username = self.username_entry.get_text ()
-		self.password = self.password_entry.get_text ()
-
-		if self.username == '' or self.password == '':
-			gtk.gdk.threads_enter ()
-			dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK, type=gtk.MESSAGE_ERROR)
-			dialog.set_position (gtk.WIN_POS_CENTER)
-			dialog.set_markup ('Error!\n\nBoth username and password are required!')
-			dialog.run ()
-			dialog.destroy ()
-			gtk.gdk.threads_leave ()
-			return False
-
-		self.onDelete (widget, user_params)
-
-	def onCancel(self, widget, user_params=None):
-		self.username = ''
-		self.password = ''
-		self.onDelete (widget, user_params)
-
-	def wait(self, timeout=None):
-		self.destroy_event.wait (timeout=timeout)
+	def get_battery_polling(self, username):
+		with self.lock:
+			return self.config.getint (username, 'battery_polling')

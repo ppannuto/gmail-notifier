@@ -7,12 +7,15 @@ logger = logging.getLogger ('gmail-notifier2')
 
 APP_NAME = 'gmail-notifier2'
 
+import os
+import sys
 import gtk
+gtk.gdk.threads_init ()
 import gobject
 gobject.set_application_name(APP_NAME)
 import threading
 import pynotify
-if not pynotify.init ("Gmail Notifier 2"):
+if not pynotify.init ("Gmail Notifier"):
 	logger.critical ("Error loading pynotify, dying...")
 	raise Exception
 from time import sleep
@@ -20,25 +23,38 @@ from time import sleep
 import keyring
 import gmailStatusIcon
 import gmailLib
-import notifierConfig
+from notifierConfig import NotifierConfig
 
-def on_update(entry, gConn):
+# GLOBAL
+gConns = list ()
+gConns_lock = threading.RLock ()
+CONF_NAME='gmail-notifier.conf'
+config = NotifierConfig ([sys.path[0]+CONF_NAME, os.path.expanduser ('~/.' + CONF_NAME), '/etc/'+CONF_NAME])
+
+def on_update(widget, user_params=None):
 	logger.debug ('on_update clicked')
-	try:
-		gConn.update (async=True, force_callbacks=True)
-	except gConn.Error:
-		pass
+	with gConns_lock:
+		logger.debug ('on_update got gConns_lock')
+		for gConn in gConns:
+			try:
+				gConn.update (async=True, force_callbacks=True)
+			except gConn.Error:
+				pass
+	logger.debug ('on_update complete')
 
-def on_tellMe(entry, gConn):
+def on_tellMe(widget, user_params=None):
 	logger.debug ('on_tellMe clicked')
-	gConn.notify ()
+	with gConns_lock:
+		for gConn in gConns:
+			gConn.notify ()
 
-def on_preferences(entry=None, gConn=None):
+def on_preferences(widget, user_params=None):
 	logger.debug ('on_preferences called')
-	preferences (entry=entry, gConn=gConn, gtk_locked=True)
+	threading.Thread (target=preferences, name='prefs_thread').start ()
 
-def on_about(entry, user_params=None):
+def on_about(widget, user_params=None):
 	logger.debug ('on_about called')
+	# Do not need gtk_threads_enter/leave since we're in a callback from a widget
 	dialog = gtk.AboutDialog ()
 	dialog.set_name ('Gmail Notifier')
 	dialog.set_version ('2.0.0')
@@ -47,43 +63,61 @@ def on_about(entry, user_params=None):
 	dialog.run ()
 	dialog.destroy ()
 
-def on_close(entry, user_params=None):
+def on_close(widget, user_params=None):
 	exit (0)
 
 
+def generateTooltip():
+	locals = threading.local ()
+	locals.tooltip = 'Gmail Notifier'
+	locals.newmail = False
+	with gConns_lock:
+		for gConn in gConns:
+			if gConn.isAuthenticationError ():
+				locals.tooltip += ('\n' + gConn.getUsername () + ': Authentication Error')
+			elif gConn.getUnreadMessageCount (update=False):
+				locals.cnt = gConn.getUnreadMessageCount (update=False)
+				locals.tooltip += ('\n' + gConn.getUsername () + ': ' + str (locals.cnt) + ' unread message' + ('s','')[locals.cnt == 1])
+				locals.newmail = True
+			else:
+				locals.tooltip += ('\n' + gConn.getUsername () + ': No unread messages')
+	return locals.tooltip, locals.newmail
+
+
+
 def onUpdate(gConn, status_icon):
-	logger.debug ('onUpdate called')
+	logger.debug ('onUpdate called by ' + gConn.getUsername ())
+	locals = threading.local ()
+	locals.tooltip, locals.newmail = generateTooltip ()
+
 	gtk.gdk.threads_enter ()
-	if gConn.getUnreadMessageCount (update=False):
+	status_icon.set_tooltip (locals.tooltip)
+	if locals.newmail:
 		status_icon.set_from_file (gmailStatusIcon.TRAY_NEWMAIL)
-		cnt = gConn.getUnreadMessageCount (update=False)
-		status_icon.set_tooltip ('Gmail Notifier -- You have ' + str (cnt) + ' unread message' + ('s','')[cnt == 1])
 	else:
 		status_icon.set_from_file (gmailStatusIcon.TRAY_NOMAIL)
-		status_icon.set_tooltip ('Gmail Notifier -- You have no unread messages')
 	gtk.gdk.threads_leave ()
 
 def onDisconnect(gConn, status_icon):
-	logger.debug ('onDisconnect called')
+	logger.debug ('onDisconnect called by ' + gConn.getUsername ())
 	gtk.gdk.threads_enter ()
 	status_icon.set_from_file (gmailStatusIcon.TRAY_NOCONN)
 	status_icon.set_tooltip ('Gmail Notifier -- Not Connected')
 	gtk.gdk.threads_leave ()
 
 def onAuthenticationError(gConn, status_icon):
-	logger.debug ('onAuthenticationError called')
+	logger.debug ('onAuthenticationError called by ' + gConn.getUsername ())
+	locals = threading.local ()
+	(locals.tooltip, locals.newmail) = generateTooltip ()
+
 	gtk.gdk.threads_enter ()
 	status_icon.set_from_file (gmailStatusIcon.TRAY_AUTHERR)
-	status_icon.set_tooltip ('Gmail Notifier -- Authentication Error')
-	dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK, type=gtk.MESSAGE_ERROR)
-	dialog.set_position (gtk.WIN_POS_CENTER)
-	dialog.set_title ('GmailNotifier2 Error')
-	dialog.set_markup ('Authentication error!\n\nBad username or password')
-	dialog.run ()
-	dialog.destroy ()
+	status_icon.set_tooltip (locals.tooltip)
 	gtk.gdk.threads_leave ()
-	preferences (gConn=gConn)
+	logger.debug ('onAuthenticationError updated status_icon')
 
+	locals.n = pynotify.Notification ('Authentication Error!', gConn.getUsername () + ' failed to authenticate')
+	locals.n.show ()
 
 def onPowerChange(args, kwargs):
 	print 'power change'
@@ -91,92 +125,70 @@ def onPowerChange(args, kwargs):
 	print 'kwargs: ' + str(kwargs)
 
 
-def PowerThread(dev, gConn):
+def PowerThread(dev, gConns):
 	from time import sleep
 	while True:
-		if dev.GetProperty ('ac_adapter.present'):
-			logger.debug ('POWER: ac adapter present')
-			gConn.set_frequency ()
-		else:
-			logger.debug ('POWER: on battery')
-			gConn.set_frequency (60)
+		for gConn in gConns:
+			if dev.GetProperty ('ac_adapter.present'):
+				logger.debug ('POWER: ac adapter present')
+				gConn.set_frequency ()
+			else:
+				logger.debug ('POWER: on battery')
+				gConn.set_frequency (60)
 		sleep (60)
 
 
-def preferences_thread(entry=None, gConn=None, gtk_locked=False):
-	logger.debug ('preferences called (gConn: ' + str(gConn) + ')')
-	Keyring = keyring.Keyring ('gmail-notifier2', 'mail.google.com', 'https')
-
-	try:
-		if Keyring.has_credentials ():
-			username, password = Keyring.get_credentials ()
-			logger.debug ('preferences: old credentials: ' + username + '/PASSWORD')
-			if not gtk_locked:
-				gtk.gdk.threads_enter ()
-			config = notifierConfig.NotifierConfigWindow (username, password, log_level=logging.DEBUG)
-			if not gtk_locked:
-				gtk.gdk.threads_leave ()
-		else:
-			logger.debug ('preferences: no old credentials')
-			if not gtk_locked:
-				gtk.gdk.threads_enter ()
-			config = notifierConfig.NotifierConfigWindow (log_level=logging.DEBUG)
-			if not gtk_locked:
-				gtk.gdk.threads_leave ()
-	except notifierConfig.NotifierConfigWindow.AlreadyRunningError:
-		logger.info ('attempt to open a second session of preferences -- this is likely indicative of a BUG')
-		return
-
-	config.wait ()
-	if config.username == '' or config.password == '':
-		logger.debug ('preferences: empty username or password field (likely cancelled)')
+def preferences(gConn=None):
+	logger.debug ('preferences called')
+	if gConn:
+		gConn.configure (config.config)
 	else:
-		logger.debug ('Got new credentials: ' + config.username + '/PASSWORD')
-		Keyring.delete_credentials ((username, password))
-		Keyring.set_credentials ((config.username, config.password))
-		if gConn:
-			logger.debug ('preferences attempting to reset credentials')
-			gConn.resetCredentials (config.username, config.password)
+		config.showConfigWindow (gConns, gConns_lock)
 
-def preferences(entry=None, gConn=None, gtk_locked=False):
-	threading.Thread (target=preferences_thread, args=(entry, gConn, gtk_locked)).start ()
+
 
 def main():
-	gtk.gdk.threads_init ()
-
-	#Load username,password from the keyring; spawn configuraion window if it isn't set
-	Keyring = keyring.Keyring (APP_NAME, 'mail.google.com', 'https')
-	if not Keyring.has_credentials ():
-		preferences ()
-		if not Keyring.has_credentials ():
-			logger.critical ("Failed to set credentials")
-			raise Exception
-
-	username, password = Keyring.get_credentials ()
-	logger.debug ('username (' + username + ') and password (REDACTED) obtained')
-
-	gConn = gmailLib.GmailConn (
-			username,
-			password,
-			logLevel=logging.DEBUG
-			)
-	logger.debug ('gConn created')
 
 	#Set up the status icon (tray icon)
 	gtk.gdk.threads_enter ()
-	status_icon = gmailStatusIcon.GmailStatusIcon (on_update, on_tellMe, on_preferences, on_about, on_close, args=gConn)
+	status_icon = gmailStatusIcon.GmailStatusIcon (on_update, on_tellMe, on_preferences, on_about, on_close, args=gConns)
 	gtk.gdk.threads_leave ()
 	logger.debug ('status icon initialized')
 
+	#Create gConn objects for each username
+	for username in config.get_usernames ():
+		logger.debug ('Creating gConn for ' + username)
+		gConns.append (gmailLib.GmailConn (
+			username, 
+			config.get_password (username),
+			frequency=config.get_ac_polling (username),
+			logLevel=logging.DEBUG)
+			)
+
 	#Create and start a gConn object to communicate with GMail
-	gConn.set_onUpdate (onUpdate, status_icon)
-	gConn.set_onDisconnect (onDisconnect, status_icon)
-	gConn.set_onAuthenticationError (onAuthenticationError, status_icon)
-	gConn.start ()
-	logger.debug ('gConn start()ed')
+	with gConns_lock:
+		for gConn in gConns:
+			gConn.set_onUpdate (onUpdate, status_icon)
+			gConn.set_onDisconnect (onDisconnect, status_icon)
+			gConn.set_onAuthenticationError (onAuthenticationError, status_icon)
+			gConn.start ()
+
+	#If there's no usernames in the config file, open the preferences dialog
+	if not config.get_usernames ():
+		logger.debug ('No usernames found in config')
+		gtk.gdk.threads_enter ()
+		dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK)
+		dialog.set_position (gtk.WIN_POS_CENTER)
+		dialog.set_title ('Gmail Notifier')
+		dialog.set_markup ('No accounts were found in the configuration file')
+		dialog.run ()
+		dialog.destroy ()
+		gtk.gdk.threads_leave ()
+		threading.Thread (target=preferences, name='prefs_thread').start ()
 
 	#Try to hook into dbus so we can monitor power state
 	try:
+		raise ImportError	# XXX
 		import dbus
 		from dbus.mainloop.glib import DBusGMainLoop
 		from dbus.mainloop.glib import threads_init as dbus_threads_init
@@ -191,7 +203,7 @@ def main():
 		dev = dbus.Interface (dev_obj, "org.freedesktop.Hal.Device")
 		dev.connect_to_signal ("PropertyModified", onPowerChange)
 
-		threading.Thread (target=PowerThread, args=(dev, gConn)).start ()
+		threading.Thread (target=PowerThread, name='PowerThread', args=(dev, gConns)).start ()
 	except ImportError:
 		pass
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # gmailLib 0.1 by Pat Pannuto <pat.pannuto@gmail.com>
-# based loosely on gmailatom 0.0.1 by Juan Grande <juan.grande@gmail.com> from the original gmail-notifier
+# based loosely on gmailatom 0.0.1 by Juan Grande <juan.grande@gmail.com> from the original gmail-notify
 
 from xml import sax
 from xml.sax import saxutils
@@ -10,6 +10,8 @@ from xml.sax import ContentHandler
 from xml.sax.handler import feature_namespaces
 from xml.utils.iso8601 import parse as parse_time
 
+import gtk
+import ConfigParser
 import urllib2
 import threading
 import logging
@@ -19,6 +21,165 @@ try:
 	import pynotify
 except ImportError:
 	pass
+
+
+class GmailConfigWindow():
+	"""Show a preferences window to configure a gConn object. Requires a valid ConfigParser object to read/write to"""
+
+	DEFAULT_AC_POLL = 20
+	DEFAULT_BATTERY_POLL = 60
+
+	def __init__(self, config, gConn=None, username=None):
+		"""Shows a preferences dialog for a gConn object. If a gConn object is supplied, all relevant settings
+		will be updated on the object, including a call to resetCredentials (e.g. this is a very appropriate
+		response resolving an AuthenticationError raised by a gConn object)
+		"""
+		self.close_event = threading.Event ()
+
+		# Copy objects
+		self.config = config
+		self.gConn = gConn
+
+		print '1'
+		if not username and gConn:
+			username = gConn.getUsername ()
+		print '2'
+
+		# Set up the top-level window
+		self.window = gtk.Window ()
+		if username:
+			self.window.set_title ('Configure ' + username)
+		else:
+			self.window.set_title ('Configure a new account')
+		self.window.set_position (gtk.WIN_POS_CENTER)
+		self.window.set_modal (True)
+
+		# Add a vbox to hold the window contents
+		self.window_vbox = gtk.VBox ()
+		self.window.add (self.window_vbox)
+
+		# Add a table to align configuration options nicely
+		self.table = gtk.Table (rows=6, columns=2)
+		self.window_vbox.pack_start (self.table)
+
+		self.username_label = gtk.Label ('Username')
+		self.username_entry = gtk.Entry ()
+		if (username):
+			self.username_entry.set_text (username)
+		self.username_entry.connect ('activate', self.onClose)
+		self.table.attach (self.username_label, 0, 1, 0, 1)
+		self.table.attach (self.username_entry, 1, 2, 0, 1)
+
+		self.password_label = gtk.Label ('Password')
+		self.password_entry = gtk.Entry ()
+		self.password_entry.set_visibility (False)
+		self.password_entry.connect ('activate', self.onClose)
+		self.table.attach (self.password_label, 0, 1, 1, 2)
+		self.table.attach (self.password_entry, 1, 2, 1, 2)
+
+		self.show_password_checkbutton = gtk.CheckButton ('Show Password')
+		self.show_password_checkbutton.active = False
+		self.show_password_checkbutton.connect ('toggled', self.onShowPasswordToggle)
+		self.table.attach (self.show_password_checkbutton, 1, 2, 2, 3)
+
+		self.proxy_label = gtk.Label ('Proxy')
+		self.proxy_entry = gtk.Entry ()
+		self.proxy_entry.connect ('activate', self.onClose)
+		try:
+			self.proxy_entry.set_text (self.config.get (username, 'proxy'))
+		except ConfigParser.Error:
+			pass
+		self.table.attach (self.proxy_label, 0, 1, 3, 4)
+		self.table.attach (self.proxy_entry, 1, 2, 3, 4)
+
+		self.ac_polling_label = gtk.Label ('AC Polling Frequency (secs)')
+		self.ac_polling_entry = gtk.SpinButton ()
+		self.ac_polling_entry.set_numeric (True)
+		self.ac_polling_entry.set_increments (5, 5)
+		self.ac_polling_entry.set_range (20, 600)
+		try:
+			self.ac_polling_entry.set_value (self.config.getint (username, 'ac_polling'))
+		except ConfigParser.Error:
+			self.ac_polling_entry.set_value (self.DEFAULT_AC_POLL)
+		self.table.attach (self.ac_polling_label, 0, 1, 4, 5)
+		self.table.attach (self.ac_polling_entry, 1, 2, 4, 5)
+
+		self.battery_polling_label = gtk.Label ('Battery Polling Frequency (secs)')
+		self.battery_polling_entry = gtk.SpinButton ()
+		self.battery_polling_entry.set_numeric (True)
+		self.battery_polling_entry.set_increments (5, 5)
+		self.battery_polling_entry.set_range (20, 600)
+		try:
+			self.battery_polling_entry.set_value (self.config.getint (username, 'battery_polling'))
+		except ConfigParser.Error:
+			self.battery_polling_entry.set_value (self.DEFAULT_BATTERY_POLL)
+		self.table.attach (self.battery_polling_label, 0, 1, 5, 6)
+		self.table.attach (self.battery_polling_entry, 1, 2, 5, 6)
+
+		# Create an hbox to hold Cancel/Close
+		self.hbox = gtk.HBox ()
+		self.window_vbox.pack_start (self.hbox)
+
+		self.cancel_button = gtk.Button (stock=gtk.STOCK_CANCEL)
+		self.cancel_button.connect ('clicked', self.onCancel)
+		self.hbox.pack_start (self.cancel_button)
+
+		self.close_button = gtk.Button (stock=gtk.STOCK_CLOSE)
+		self.close_button.connect ('clicked', self.onClose)
+		self.hbox.pack_start (self.close_button)
+
+		# We're all set up, show and go
+		self.window.show_all ()
+		gtk.main ()
+
+	def onShowPasswordToggle(self, widget, user_params=None):
+		if widget.get_active ():
+			self.password_entry.set_visibility (True)
+		else:
+			self.password_entry.set_visibility (False)
+
+	def onCancel(self, widget, user_params=None):
+		self.window.destroy ()
+		self.close_event.set ()
+
+	def onClose(self, widget, user_params=None):
+		print 'wtf'
+		username = self.username_entry.get_text ()
+		password = self.password_entry.get_text ()
+		proxy = self.proxy_entry.get_text ()
+		ac_polling = int (self.ac_polling_entry.get_value ())
+		battery_polling = int (self.battery_polling_entry.get_value ())
+
+		if username == '' or password == '':
+			#gtk.gdk.threads_enter ()
+			dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK, type=gtk.MESSAGE_ERROR)
+			dialog.set_position (gtk.WIN_POS_CENTER)
+			dialog.set_modal (True)
+			dialog.set_markup ('Error!\n\nBoth username and password are required!')
+			dialog.run ()
+			dialog.destroy ()
+			#gtk.gdk.threads_leave ()
+			return False
+		else:
+			if username.find ('@gmail.com') == -1:
+				username += '@gmail.com'
+			try:
+				self.config.add_section (username)
+			except ConfigParser.DuplicateSectionError:
+				pass
+			self.config.set (username, 'password', password)
+			self.config.set (username, 'proxy', proxy)
+			self.config.set (username, 'ac_polling', str (ac_polling))
+			self.config.set (username, 'battery_polling', str (battery_polling))
+
+			if self.gConn:
+				#self.gConn.set_ac_frequency (ac_polling)
+				#self.gConn.set_battery_frequency (battery_polling)
+				self.gConn.resetCredentials (username, password, proxy)
+
+			self.window.destroy ()
+			self.close_event.set ()
+
 
 class Email():
 	title = ""
@@ -201,7 +362,7 @@ OPTIONAL ARGUMENTS:
 	
 	frequency=TIMEOUT [default: 20], also GmailConn.set_frequency()
 		The frequncy at which to poll GMail in seconds.
-		_NOTE_: Values < 20sec are not recommended as GMail may get mad at you...
+		NOTE: Values < 20sec are not recommended as GMail may get mad at you...
 
 	disconnect_threshold=THRESHOLD [default: 60], also GmailConn.set_disconnect_threshold()
 		The amount of time allowed to pass between successful updates before gConn will consider itself disconnected
@@ -223,11 +384,11 @@ OPTIONAL ARGUMENTS:
 		pass
 
 	class UnrecoverableError(Error):
-		"""This error is currently unused, but is a placeholder for an unrecoverable error in the library
-		
-		It exists because every other error in this class can be handled in some manner that would allow the continuation
-		of normal function, but if there is any need for a fatal error in the future, it is desireable that a mechanism
-		exists to handle that case"""
+		"""This error is never directly raised, rather, it is subclassed for various unrecoverable conditions"""
+		pass
+
+	class CancelledError(Error):
+		"""The user cancelled the input box when instantiating a gConn with config != None"""
 		pass
 
 	class AuthenticationError(Error):
@@ -258,8 +419,8 @@ OPTIONAL ARGUMENTS:
 
 	def __init__(
 			self,
-			username,
-			password,
+			username=None,
+			password=None,
 			proxy=None,
 			onUpdate=None,
 			onUpdateArgs=None,
@@ -273,14 +434,18 @@ OPTIONAL ARGUMENTS:
 			start=False,
 			frequency=TIMEOUT,
 			disconnect_threshold=THRESHOLD,
+			config=None,
 			logLevel=logging.WARNING
 			):
 		
-		# Copy in relevant initialization variables
 		self.logLevel = logLevel
 		logging.basicConfig (level=self.logLevel, format="%(asctime)s [%(levelname)s]\t{%(thread)s} %(name)s:%(lineno)d %(message)s")
 		self.logger = logging.getLogger ('gmailLib')
 		
+		if (username == None or password == None) and config == None:
+			raise TypeError ('One of username/password or config must be defined!')
+		
+		# Copy in relevant initialization variables
 		self.notifications = notifications
 		if (notifications):
 			import pynotify
@@ -313,20 +478,35 @@ OPTIONAL ARGUMENTS:
 		self.last_modified = 0
 		self.disconnected = True
 		
-		# Add @gmail.com if the caller didn't
-		if (username.rfind("@gmail.com")) == -1:
-			username += "@gmail.com"
-			self.logger.info ("Did not get FQ email address, using " + username)
+		if config:
+			self.logger.debug ('Creating a new gConn with configure')
+			self.configure (config)
+			try:
+				frequency = config.get_ac_frequency (self.username)
+			except NameError:
+				raise self.CancelledError
+		else:
+			self.username = username
+			self.resetCredentials (username, password, proxy)
 		
 		self.xml_parser = GmailXmlHandler()
-		
-		self.resetCredentials (username, password, proxy)
 		
 		# Start the gConn object if requested (not default)
 		if (start):
 			self.start ()
 
 		self.logger.debug ("GmailConn.__init__ completed successfully")
+
+	def configure(self, config):
+		"""Spawns a configuration window for this gConn object, which will be updated. (You can use gConn.getUsername
+		to retrieve the username after this call if you so require)"""
+		locals = threading.local ()
+		self.logger.debug ('GMailConn configure called')
+		locals.w = GmailConfigWindow (config, gConn=self)
+		self.logger.debug ('GmailConn configure window spawned')
+		locals.w.close_event.wait ()
+		self.logger.debug ('GmailConn configure window wait completed')
+
 
 	def start(self):
 		"""(nonblocking) Spawns an updater thread that will poll GMail. You may poll the gConn object for updates,
@@ -339,6 +519,7 @@ OPTIONAL ARGUMENTS:
 
 		self.thread = threading.Thread (group=None, target=self.updater)
 		self.thread.daemon = True
+		self.thread.name = 'GmailLib: gConn::updater - ' + self.username
 		self.thread.start ()
 		self.started = True
 		self.lock.release()
@@ -436,7 +617,7 @@ OPTIONAL ARGUMENTS:
 		onAuthenticationError), but any other transient error will be lost.
 		"""
 		if async:
-			t = threading.Thread (target=self.refreshInfo, args=(force_callbacks,))
+			t = threading.Thread (target=self.refreshInfo, name='GmailLib: gConn::async_update', args=(force_callbacks,))
 			t.daemon = True
 			t.start ()
 		else:
@@ -454,7 +635,10 @@ OPTIONAL ARGUMENTS:
 			locals.auth_error = self.auth_error
 			self.lock.release ()
 			if not locals.auth_error:
-				self.refreshInfo ()
+				try:
+					self.refreshInfo ()
+				except self.ParseError as e:
+					self.logger.warning (str(e))
 			self.lock.acquire ()
 			locals.frequency = self.frequency
 			self.lock.release ()
@@ -477,6 +661,8 @@ OPTIONAL ARGUMENTS:
 		
 		self.lock.acquire ()
 		connected = self.isConnected (update=False)
+		
+		title += self.username + ': '
 		
 		if emails:
 			show = emails
@@ -517,6 +703,9 @@ OPTIONAL ARGUMENTS:
 		self.lock.acquire ()
 		reload (urllib2)
 		
+		if (username.rfind("@gmail.com")) == -1:
+			raise ParseError ('Bad username, @gmail.com is required', username)
+		
 		# initialize authorization handler
 		auth_handler = urllib2.HTTPBasicAuthHandler()
 		auth_handler.add_password( self.realm, self.host, username, password)
@@ -524,11 +713,9 @@ OPTIONAL ARGUMENTS:
 		# manage proxy
 		if proxy:
 			proxy_handler = urllib2.ProxyHandler({'http': proxy})
-			opener = urllib2.build_opener(proxy_handler, auth_handler)
+			self.opener = urllib2.build_opener(proxy_handler, auth_handler)
 		else:
-			opener = urllib2.build_opener(auth_handler)
-		
-		urllib2.install_opener(opener)
+			self.opener = urllib2.build_opener(auth_handler)
 		
 		if self.started:
 			self.events[0][1].set ()
@@ -538,10 +725,11 @@ OPTIONAL ARGUMENTS:
 
 	def sendRequest(self):
 		"""Internal -- There is no reason to call this directly"""
-		return urllib2.urlopen(self.url, timeout=10)
+		return self.opener.open(self.url, timeout=10)
 #		return open('feed.xml', 'r')
 
 	def refreshInfo(self, force_callbacks=False):
+		self.logger.debug ('refreshInfo -- starting...')
 		"""Internal -- There is no reason to call this directly"""
 		# get the page and parse it
 		self.network_lock.acquire ()
@@ -562,7 +750,8 @@ OPTIONAL ARGUMENTS:
 					show.append (email.dict ())
 
 			if len (show):
-				assert self.getUnreadMessageCount (False)
+				if not self.getUnreadMessageCount (False):
+					raise self.ParseError ('len (show): %d does not match getUnreadMessageCount: %d' % (len (show), self.getUnreadMessageCount (False)))
 			
 			if len (show) and self.notifications:
 				self.notify (show)
@@ -653,8 +842,26 @@ OPTIONAL ARGUMENTS:
 		defined by having valid data within the last disconnect_threshold seconds. Alternatively, set update=True to force an
 		immediate connection validation, even if it has previously connected once in the last disconnect_threshold seconds
 		
-		Note, calling this with update=True will raise a GmailConn.ConnectionError if the connection fails"""
+		Note, calling this with update=True will raise a GmailConn.ConnectionError if the connection fails
+		
+		Note, calling this with update=True will or update=None may block"""
 		return self.u (update, use_disconnect_threshold=True)
+
+	def isAuthenticationError(self):
+		"""Returns authentication status in a thread-safe manner"""
+		with self.lock:
+			return self.auth_error
+
+	def getUsername(self, update=None):
+		"""Returns the GMail username associated with this gConn object"""
+		locals = threading.local ()
+		self.lock.acquire ()
+		try:
+			locals.username = self.username
+		except AttributeError:
+			locals.username = None
+		self.lock.release ()
+		return locals.username
 
 	def getModificationTime(self, update=None):
 		"""Returns the timestamp ( as a float analogous to time.time() ) from the RSS feed when the feed was last updated.
@@ -670,11 +877,8 @@ OPTIONAL ARGUMENTS:
 		"""Returns the number of unread messages in the gmail inbox"""
 		locals = threading.local ()
 		self.u (update)
-		self.lock.acquire ()
-		assert self.xml_parser.email_count == len(self.xml_parser.emails)
-		locals.ret = self.xml_parser.email_count
-		self.lock.release ()
-		return locals.ret
+		with self.lock:
+			return self.xml_parser.email_count
 
 	def getNewestEmail(self, update=None):
 		"""Returns the newest available email"""
