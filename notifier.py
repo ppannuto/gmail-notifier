@@ -3,9 +3,9 @@
 
 import logging
 logging.basicConfig (level=logging.DEBUG, format="%(asctime)s [%(levelname)s]\t{%(thread)d} %(name)s:%(lineno)d %(message)s")
-logger = logging.getLogger ('gmail-notifier2')
+logger = logging.getLogger ('notifier')
 
-APP_NAME = 'gmail-notifier2'
+APP_NAME = 'gmail-notifier'
 
 import os
 import sys
@@ -30,6 +30,7 @@ gConns = list ()
 gConns_lock = threading.RLock ()
 CONF_NAME='gmail-notifier.conf'
 config = NotifierConfig ([sys.path[0]+CONF_NAME, os.path.expanduser ('~/.' + CONF_NAME), '/etc/'+CONF_NAME])
+config_lock = threading.RLock ()
 
 def on_update(widget, user_params=None):
 	logger.debug ('on_update clicked')
@@ -140,10 +141,11 @@ def PowerThread(dev, gConns):
 
 def preferences(gConn=None):
 	logger.debug ('preferences called')
-	if gConn:
-		gConn.configure (config.config)
-	else:
-		config.showConfigWindow (gConns, gConns_lock)
+	with config_lock:
+		if gConn:
+			gConn.configure (config)
+		else:
+			config.showConfigWindow (gConns, gConns_lock)
 
 
 
@@ -174,17 +176,18 @@ def main():
 			gConn.start ()
 
 	#If there's no usernames in the config file, open the preferences dialog
-	if not config.get_usernames ():
-		logger.debug ('No usernames found in config')
-		gtk.gdk.threads_enter ()
-		dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK)
-		dialog.set_position (gtk.WIN_POS_CENTER)
-		dialog.set_title ('Gmail Notifier')
-		dialog.set_markup ('No accounts were found in the configuration file')
-		dialog.run ()
-		dialog.destroy ()
-		gtk.gdk.threads_leave ()
-		threading.Thread (target=preferences, name='prefs_thread').start ()
+	with config_lock:
+		if not config.get_usernames ():
+			logger.debug ('No usernames found in config')
+			gtk.gdk.threads_enter ()
+			dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK)
+			dialog.set_position (gtk.WIN_POS_CENTER)
+			dialog.set_title ('Gmail Notifier')
+			dialog.set_markup ('No accounts were found in the configuration file')
+			dialog.run ()
+			dialog.destroy ()
+			gtk.gdk.threads_leave ()
+			threading.Thread (target=preferences, name='prefs_thread').start ()
 
 	#Try to hook into dbus so we can monitor power state
 	try:

@@ -37,7 +37,7 @@ class GmailConfigWindow():
 		self.close_event = threading.Event ()
 
 		# Copy objects
-		self.config = config
+		self.config = config.config
 		self.gConn = gConn
 
 		print '1'
@@ -46,7 +46,8 @@ class GmailConfigWindow():
 		print '2'
 
 		# Set up the top-level window
-		self.window = gtk.Window ()
+		#self.window = gtk.Window ()
+		self.window = gtk.Dialog ()
 		if username:
 			self.window.set_title ('Configure ' + username)
 		else:
@@ -55,12 +56,14 @@ class GmailConfigWindow():
 		self.window.set_modal (True)
 
 		# Add a vbox to hold the window contents
-		self.window_vbox = gtk.VBox ()
-		self.window.add (self.window_vbox)
+		#self.window_vbox = gtk.VBox ()
+		#self.window.add (self.window_vbox)
+		self.window_vbox = self.window.get_content_area ()
 
 		# Add a table to align configuration options nicely
 		self.table = gtk.Table (rows=6, columns=2)
 		self.window_vbox.pack_start (self.table)
+		self.table.show ()
 
 		self.username_label = gtk.Label ('Username')
 		self.username_entry = gtk.Entry ()
@@ -69,6 +72,8 @@ class GmailConfigWindow():
 		self.username_entry.connect ('activate', self.onClose)
 		self.table.attach (self.username_label, 0, 1, 0, 1)
 		self.table.attach (self.username_entry, 1, 2, 0, 1)
+		self.username_label.show ()
+		self.username_entry.show ()
 
 		self.password_label = gtk.Label ('Password')
 		self.password_entry = gtk.Entry ()
@@ -76,11 +81,14 @@ class GmailConfigWindow():
 		self.password_entry.connect ('activate', self.onClose)
 		self.table.attach (self.password_label, 0, 1, 1, 2)
 		self.table.attach (self.password_entry, 1, 2, 1, 2)
+		self.password_label.show ()
+		self.password_entry.show ()
 
 		self.show_password_checkbutton = gtk.CheckButton ('Show Password')
 		self.show_password_checkbutton.active = False
 		self.show_password_checkbutton.connect ('toggled', self.onShowPasswordToggle)
 		self.table.attach (self.show_password_checkbutton, 1, 2, 2, 3)
+		self.show_password_checkbutton.show ()
 
 		self.proxy_label = gtk.Label ('Proxy')
 		self.proxy_entry = gtk.Entry ()
@@ -91,6 +99,8 @@ class GmailConfigWindow():
 			pass
 		self.table.attach (self.proxy_label, 0, 1, 3, 4)
 		self.table.attach (self.proxy_entry, 1, 2, 3, 4)
+		self.proxy_label.show ()
+		self.proxy_entry.show ()
 
 		self.ac_polling_label = gtk.Label ('AC Polling Frequency (secs)')
 		self.ac_polling_entry = gtk.SpinButton ()
@@ -103,6 +113,8 @@ class GmailConfigWindow():
 			self.ac_polling_entry.set_value (self.DEFAULT_AC_POLL)
 		self.table.attach (self.ac_polling_label, 0, 1, 4, 5)
 		self.table.attach (self.ac_polling_entry, 1, 2, 4, 5)
+		self.ac_polling_label.show ()
+		self.ac_polling_entry.show ()
 
 		self.battery_polling_label = gtk.Label ('Battery Polling Frequency (secs)')
 		self.battery_polling_entry = gtk.SpinButton ()
@@ -115,22 +127,28 @@ class GmailConfigWindow():
 			self.battery_polling_entry.set_value (self.DEFAULT_BATTERY_POLL)
 		self.table.attach (self.battery_polling_label, 0, 1, 5, 6)
 		self.table.attach (self.battery_polling_entry, 1, 2, 5, 6)
+		self.battery_polling_label.show ()
+		self.battery_polling_entry.show ()
 
 		# Create an hbox to hold Cancel/Close
 		self.hbox = gtk.HBox ()
 		self.window_vbox.pack_start (self.hbox)
+		self.hbox.show ()
 
 		self.cancel_button = gtk.Button (stock=gtk.STOCK_CANCEL)
 		self.cancel_button.connect ('clicked', self.onCancel)
 		self.hbox.pack_start (self.cancel_button)
+		self.cancel_button.show ()
 
 		self.close_button = gtk.Button (stock=gtk.STOCK_CLOSE)
 		self.close_button.connect ('clicked', self.onClose)
 		self.hbox.pack_start (self.close_button)
+		self.close_button.show ()
 
 		# We're all set up, show and go
-		self.window.show_all ()
-		gtk.main ()
+		#self.window.show_all ()
+		#gtk.main ()
+		self.window.run ()
 
 	def onShowPasswordToggle(self, widget, user_params=None):
 		if widget.get_active ():
@@ -482,8 +500,8 @@ OPTIONAL ARGUMENTS:
 			self.logger.debug ('Creating a new gConn with configure')
 			self.configure (config)
 			try:
-				frequency = config.get_ac_frequency (self.username)
-			except NameError:
+				frequency = config.get_ac_polling (self.username)
+			except AttributeError:
 				raise self.CancelledError
 		else:
 			self.username = username
@@ -700,11 +718,14 @@ OPTIONAL ARGUMENTS:
 		self.lock.release ()
 
 	def resetCredentials(self, username, password, proxy=None):
+		self.logger.debug ('resetCredentials called for ' + username)
 		self.lock.acquire ()
 		reload (urllib2)
 		
 		if (username.rfind("@gmail.com")) == -1:
 			raise ParseError ('Bad username, @gmail.com is required', username)
+
+		self.username = username
 		
 		# initialize authorization handler
 		auth_handler = urllib2.HTTPBasicAuthHandler()
