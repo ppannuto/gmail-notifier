@@ -7,15 +7,15 @@ from gmailLib import GmailConn
 
 class NotifierConfigWindow:
 
-	def __init__(self, config, gConns, gConns_lock):
+	def __init__(self, config, gConns, gConns_lock, onNewGConn, onNewGConnArgs):
 		self.close_event = threading.Event ()
 		self.config = config
 		self.gConns = gConns
 		self.gConns_lock = gConns_lock
+		self.onNewGConn = onNewGConn
+		self.onNewGConnArgs = onNewGConnArgs
 		self.buildWindow ()
-		print "Result: " + str ( self.window.run () )
-
-		self.config.config.write (open (os.path.expanduser ('~/.gmail-notifier.conf'), 'w'))
+		self.window.run ()
 		self.window.destroy ()
 		self.close_event.set ()
 
@@ -28,21 +28,39 @@ class NotifierConfigWindow:
 		# Add a vbox to hold the window contents
 		self.window_vbox = self.window.get_content_area ()
 
-		# Add instructions (Label) at the top of the window
-		self.top_label = gtk.Label ('Add, remove, and configure GMail accounts')
-		self.top_label.set_alignment(xalign=0.5, yalign=0.5)
-		self.window_vbox.pack_start (self.top_label)
-		self.top_label.show ()
+		# Add buttons for every account
+		self.accounts = self.generateAccountsFrames ()
+		temp = self.accounts.keys ()
+		temp.sort ()
+		for username in temp:
+			self.window_vbox.pack_start (self.accounts[username][0])
 
+		# Put this button in the Dialog 'Action Area'
+		self.window_bbox = self.window.get_action_area ()
+		# 'Add new account' button
+		self.new_account_button = gtk.Button (stock=gtk.STOCK_ADD, label="_Add a new account...")
+		self.new_account_button.set_label ('_Add a new account...')
+		self.new_account_button.connect ('clicked', self.configureAccount)
+		self.window_bbox.add (self.new_account_button)
+		self.new_account_button.show ()
+
+		# Close window button
+		#self.close_button = gtk.Button (stock=gtk.STOCK_CLOSE)
+		#self.window_vbox.pack_start (self.close_button)
+		#self.close_button.show ()
+
+		self.close_event.clear ()
+		self.window.show_all ()
+
+	def generateAccountsFrames(self):
 		# Create widgets for each email account and pack them into the table
-		self.accounts = list()
+		accounts = dict ()
 		for username in self.config.get_usernames ():
-			print 'adding widgets for ' + username
 			frame = gtk.Frame (username)
 			bbox = gtk.HButtonBox ()
 			configure = gtk.Button (stock=gtk.STOCK_PREFERENCES)
 			delete = gtk.Button (stock=gtk.STOCK_DELETE)
-			self.accounts.append (  (frame, bbox, configure, delete)  )
+			accounts.update ( {username:(frame, bbox, configure, delete)}  )
 
 			frame.set_border_width (10)
 			frame.add (bbox)
@@ -54,52 +72,42 @@ class NotifierConfigWindow:
 			bbox.add (delete)
 			delete.connect ('clicked', self.deleteAccount, username)
 
-			self.window_vbox.pack_start (frame)
-
 			frame.show ()
 			bbox.show ()
 			configure.show ()
 			delete.show ()
-
-		# 'Add new account' button
-		self.new_account_button = gtk.Button (stock=gtk.STOCK_ADD, label="_Add a new account...")
-		self.new_account_button.set_label ('_Add a new account...')
-		self.new_account_button.connect ('clicked', self.configureAccount)
-		alignment = gtk.Alignment (xalign=1.0)
-		alignment.add (self.new_account_button)
-		self.window_vbox.pack_start (alignment)
-		alignment.show ()
-		self.new_account_button.show ()
-
-		# Close window button
-		#self.close_button = gtk.Button (stock=gtk.STOCK_CLOSE)
-		#self.window_vbox.pack_start (self.close_button)
-		#self.close_button.show ()
-
-		self.close_event.clear ()
-		self.window.show_all ()
+		return accounts
 
 	def configureAccount(self, widget, username=None):
-		self.window.hide ()
 		with self.gConns_lock:
 			if username:
-				print ('configureAccount with username ' + username + ' called')
-				for gConn in self.gConns:
+				for gConn in self.gConns.values ():
 					if gConn.getUsername () == username:
 						gConn.configure (self.config)
 			else:
-				print ('configureAccount with username=None called')
 				try:
-					self.gConns.append (GmailConn (config=self.config))
+					gConn = GmailConn (config=self.config)
+					self.gConns.update ({gConn.getUsername ():gConn})
+					if self.onNewGConn:
+						self.onNewGConn (gConn, self.onNewGConnArgs)
 				except GmailConn.CancelledError:
-					print ('configureAccount new account creation cancelled')
-		self.buildWindow ()
-		print ('configureAccount complete')
-		self.window.show ()
+					return
+		# Update window
+		for username, widgets in self.accounts.iteritems ():
+			self.window_vbox.remove (widgets[0])
+		self.accounts = self.generateAccountsFrames ()
+		temp = self.accounts.keys ()
+		temp.sort ()
+		for username in temp:
+			self.window_vbox.pack_start (self.accounts[username][0])
 
 
 	def deleteAccount(self, widget, username):
 		self.config.config.remove_section (username)
+		self.window_vbox.remove (self.accounts[username][0])
+		with self.gConns_lock:
+			gConn = self.gConns.pop (username)
+			del gConn
 
 
 class NotifierConfig:
@@ -108,23 +116,33 @@ class NotifierConfig:
 	class Error(Exception):
 		pass
 
-	def __init__(self, files):
+	class AlreadyRunningError(Error):
+		pass
+
+	def __init__(self, files, onNewGConn=None, onNewGConnArgs=None):
+		self.onNewGConn = onNewGConn
+		self.onNewGConnArgs = onNewGConnArgs
 		self.readConfigFiles (files)
 
 	def readConfigFiles(self, files):
 		self.config = ConfigParser.SafeConfigParser ()
 		self.config.read (files)
 
-	def showConfigWindow(self, gConns, gConns_lock):
-		print 'a'
+	def showConfigWindow(self, gConns, gConns_lock, onNewGConn=None, onNewGConnArgs=None):
 		gtk.gdk.threads_enter ()
-		print 'd'
-		n = NotifierConfigWindow (self, gConns, gConns_lock)
-		print 'e'
+		n = NotifierConfigWindow (
+				self,
+				gConns,
+				gConns_lock,
+				(onNewGConn, self.onNewGConn)[onNewGConn == None],
+				(onNewGConnArgs, self.onNewGConnArgs)[onNewGConnArgs == None]
+				)
 		gtk.gdk.threads_leave ()
-		print 'f'
 		n.close_event.wait ()
-		print 'g'
+
+	def set_onNewGConn(self, onNewGConn, onNewGConnArgs=None):
+		self.onNewGConn = onNewGConn
+		self.onNewGConnArgs = onNewGConnArgs
 
 	def get_usernames(self):
 		return self.config.sections ()

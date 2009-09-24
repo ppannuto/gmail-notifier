@@ -26,17 +26,18 @@ import gmailLib
 from notifierConfig import NotifierConfig
 
 # GLOBAL
-gConns = list ()
+gConns = dict ()
 gConns_lock = threading.RLock ()
 CONF_NAME='gmail-notifier.conf'
 config = NotifierConfig ([sys.path[0]+CONF_NAME, os.path.expanduser ('~/.' + CONF_NAME), '/etc/'+CONF_NAME])
 config_lock = threading.RLock ()
+prefs_lock = threading.Lock ()
 
 def on_update(widget, user_params=None):
 	logger.debug ('on_update clicked')
 	with gConns_lock:
 		logger.debug ('on_update got gConns_lock')
-		for gConn in gConns:
+		for gConn in gConns.values ():
 			try:
 				gConn.update (async=True, force_callbacks=True)
 			except gConn.Error:
@@ -46,7 +47,7 @@ def on_update(widget, user_params=None):
 def on_tellMe(widget, user_params=None):
 	logger.debug ('on_tellMe clicked')
 	with gConns_lock:
-		for gConn in gConns:
+		for gConn in gConns.values ():
 			gConn.notify ()
 
 def on_preferences(widget, user_params=None):
@@ -68,54 +69,55 @@ def on_close(widget, user_params=None):
 	exit (0)
 
 
-def generateTooltip():
+def updateTooltip(status_icon, gtk_locked=False):
 	locals = threading.local ()
 	locals.tooltip = 'Gmail Notifier'
 	locals.newmail = False
+	locals.authErr = False
 	with gConns_lock:
-		for gConn in gConns:
+		for gConn in gConns.values ():
 			if gConn.isAuthenticationError ():
+				locals.authErr = True
 				locals.tooltip += ('\n' + gConn.getUsername () + ': Authentication Error')
 			elif gConn.getUnreadMessageCount (update=False):
+				locals.newmail = True
 				locals.cnt = gConn.getUnreadMessageCount (update=False)
 				locals.tooltip += ('\n' + gConn.getUsername () + ': ' + str (locals.cnt) + ' unread message' + ('s','')[locals.cnt == 1])
-				locals.newmail = True
+			elif not gConn.isConnected (update=False):
+				# There is a _very_ small window before one of onUpdate,onAuthenticationError,onDisconnect has been called
+				locals.tooltip += ('\n' + gConn.getUsername () + ': Connecting...')
 			else:
 				locals.tooltip += ('\n' + gConn.getUsername () + ': No unread messages')
-	return locals.tooltip, locals.newmail
 
+	if not gtk_locked:
+		gtk.gdk.threads_enter ()
+	status_icon.set_tooltip (locals.tooltip)
+	if locals.authErr:
+		status_icon.set_from_file (status_icon.TRAY_AUTHERR)
+	elif locals.newmail:
+		status_icon.set_from_file (status_icon.TRAY_NEWMAIL)
+	else:
+		status_icon.set_from_file (status_icon.TRAY_NOMAIL)
+	if not gtk_locked:
+		gtk.gdk.threads_leave ()
 
 
 def onUpdate(gConn, status_icon):
 	logger.debug ('onUpdate called by ' + gConn.getUsername ())
-	locals = threading.local ()
-	locals.tooltip, locals.newmail = generateTooltip ()
-
-	gtk.gdk.threads_enter ()
-	status_icon.set_tooltip (locals.tooltip)
-	if locals.newmail:
-		status_icon.set_from_file (gmailStatusIcon.TRAY_NEWMAIL)
-	else:
-		status_icon.set_from_file (gmailStatusIcon.TRAY_NOMAIL)
-	gtk.gdk.threads_leave ()
+	updateTooltip (status_icon)
 
 def onDisconnect(gConn, status_icon):
 	logger.debug ('onDisconnect called by ' + gConn.getUsername ())
 	gtk.gdk.threads_enter ()
-	status_icon.set_from_file (gmailStatusIcon.TRAY_NOCONN)
+	status_icon.set_from_file (status_icon.TRAY_NOCONN)
 	status_icon.set_tooltip ('Gmail Notifier -- Not Connected')
 	gtk.gdk.threads_leave ()
 
 def onAuthenticationError(gConn, status_icon):
 	logger.debug ('onAuthenticationError called by ' + gConn.getUsername ())
 	locals = threading.local ()
-	(locals.tooltip, locals.newmail) = generateTooltip ()
 
-	gtk.gdk.threads_enter ()
-	status_icon.set_from_file (gmailStatusIcon.TRAY_AUTHERR)
-	status_icon.set_tooltip (locals.tooltip)
-	gtk.gdk.threads_leave ()
-	logger.debug ('onAuthenticationError updated status_icon')
+	updateTooltip (status_icon)
 
 	locals.n = pynotify.Notification ('Authentication Error!', gConn.getUsername () + ' failed to authenticate')
 	locals.n.show ()
@@ -124,6 +126,31 @@ def onPowerChange(args, kwargs):
 	print 'power change'
 	print '  args: ' + str(args)
 	print 'kwargs: ' + str(kwargs)
+
+
+def onNewGConn(gConn, status_icon):
+	# Already have gtk.gdk.threads () and gConns_lock
+	gConn.set_onUpdate (onUpdate, status_icon)
+	gConn.set_onDisconnect (onDisconnect, status_icon)
+	gConn.set_onAuthenticationError (onAuthenticationError, status_icon)
+	gConn.start ()
+	updateTooltip (status_icon, gtk_locked=True)
+
+def preferences(gConn=None):
+	logger.debug ('preferences called')
+	# XXX: ugly
+	if prefs_lock.locked (): # Why do Lock's not provide blocking=0 like RLock's?
+		logger.debug ('do not allow multiple instances of preferences at once')
+	else:
+		prefs_lock.acquire ()
+
+	with config_lock:
+		if gConn:
+			gConn.configure (config)
+		else:
+			config.showConfigWindow (gConns, gConns_lock)
+
+	prefs_lock.release ()
 
 
 def PowerThread(dev, gConns):
@@ -139,41 +166,32 @@ def PowerThread(dev, gConns):
 		sleep (60)
 
 
-def preferences(gConn=None):
-	logger.debug ('preferences called')
-	with config_lock:
-		if gConn:
-			gConn.configure (config)
-		else:
-			config.showConfigWindow (gConns, gConns_lock)
-
-
-
 def main():
 
 	#Set up the status icon (tray icon)
 	gtk.gdk.threads_enter ()
 	status_icon = gmailStatusIcon.GmailStatusIcon (on_update, on_tellMe, on_preferences, on_about, on_close, args=gConns)
 	gtk.gdk.threads_leave ()
+	config.set_onNewGConn (onNewGConn, status_icon)
 	logger.debug ('status icon initialized')
 
 	#Create gConn objects for each username
 	for username in config.get_usernames ():
 		logger.debug ('Creating gConn for ' + username)
-		gConns.append (gmailLib.GmailConn (
-			username, 
-			config.get_password (username),
-			frequency=config.get_ac_polling (username),
-			logLevel=logging.DEBUG)
-			)
+		gConns.update (
+				{username:
+				gmailLib.GmailConn (
+					username,
+					config.get_password (username),
+					frequency=config.get_ac_polling (username),
+					logLevel=logging.DEBUG
+					)
+				})
 
 	#Create and start a gConn object to communicate with GMail
 	with gConns_lock:
-		for gConn in gConns:
-			gConn.set_onUpdate (onUpdate, status_icon)
-			gConn.set_onDisconnect (onDisconnect, status_icon)
-			gConn.set_onAuthenticationError (onAuthenticationError, status_icon)
-			gConn.start ()
+		for gConn in gConns.values ():
+			onNewGConn (gConn, status_icon)
 
 	#If there's no usernames in the config file, open the preferences dialog
 	with config_lock:

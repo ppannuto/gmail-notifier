@@ -10,7 +10,9 @@ from xml.sax import ContentHandler
 from xml.sax.handler import feature_namespaces
 from xml.utils.iso8601 import parse as parse_time
 
+import os
 import gtk
+import gobject
 import ConfigParser
 import urllib2
 import threading
@@ -40,10 +42,8 @@ class GmailConfigWindow():
 		self.config = config.config
 		self.gConn = gConn
 
-		print '1'
 		if not username and gConn:
 			username = gConn.getUsername ()
-		print '2'
 
 		# Set up the top-level window
 		#self.window = gtk.Window ()
@@ -95,7 +95,7 @@ class GmailConfigWindow():
 		self.window_vbox.pack_start (self.expander)
 		self.expander.show ()
 
-		self.expander_table = gtk.Table (rows=4, columns=2)
+		self.expander_table = gtk.Table (rows=3, columns=2)
 		self.expander.add (self.expander_table)
 		self.expander_table.show ()
 
@@ -155,8 +155,6 @@ class GmailConfigWindow():
 		self.close_button.show ()
 
 		# We're all set up, show and go
-		#self.window.show_all ()
-		#gtk.main ()
 		self.window.run ()
 
 	def onShowPasswordToggle(self, widget, user_params=None):
@@ -170,7 +168,6 @@ class GmailConfigWindow():
 		self.close_event.set ()
 
 	def onClose(self, widget, user_params=None):
-		print 'wtf'
 		username = self.username_entry.get_text ()
 		password = self.password_entry.get_text ()
 		proxy = self.proxy_entry.get_text ()
@@ -198,6 +195,7 @@ class GmailConfigWindow():
 			self.config.set (username, 'proxy', proxy)
 			self.config.set (username, 'ac_polling', str (ac_polling))
 			self.config.set (username, 'battery_polling', str (battery_polling))
+			self.config.write (open (os.path.expanduser ('~/.gmail-notifier.conf'), 'w'))
 
 			if self.gConn:
 				#self.gConn.set_ac_frequency (ac_polling)
@@ -550,7 +548,6 @@ OPTIONAL ARGUMENTS:
 		self.thread.start ()
 		self.started = True
 		self.lock.release()
-		self.logger.debug ('updater thread spawned successfully')
 
 	def set_onUpdate(self, onUpdate, onUpdateArgs=None):
 		"""Sets the onUpdate callback.  This function is called whenever the GMail atom feed it updated.  This is
