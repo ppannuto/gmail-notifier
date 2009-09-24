@@ -7,13 +7,15 @@ from gmailLib import GmailConn
 
 class NotifierConfigWindow:
 
-	def __init__(self, config, gConns, gConns_lock, onNewGConn, onNewGConnArgs):
+	def __init__(self, config, gConns, gConns_lock, onNewGConn=None, onNewGConnArgs=None, onDeleteGConn=None, onDeleteGConnArgs=None):
 		self.close_event = threading.Event ()
 		self.config = config
 		self.gConns = gConns
 		self.gConns_lock = gConns_lock
 		self.onNewGConn = onNewGConn
 		self.onNewGConnArgs = onNewGConnArgs
+		self.onDeleteGConn = onDeleteGConn
+		self.onDeleteGConnArgs = onDeleteGConnArgs
 		self.buildWindow ()
 		self.window.run ()
 		self.window.destroy ()
@@ -107,7 +109,13 @@ class NotifierConfigWindow:
 		self.window_vbox.remove (self.accounts[username][0])
 		with self.gConns_lock:
 			gConn = self.gConns.pop (username)
-			del gConn
+			if self.onDeleteGConn:
+				if self.onDeleteGConn (gConn, self.onDeleteGConnArgs) == False:
+					pass
+				else:
+					del gConn
+			else:
+				del gConn
 
 
 class NotifierConfig:
@@ -119,23 +127,27 @@ class NotifierConfig:
 	class AlreadyRunningError(Error):
 		pass
 
-	def __init__(self, files, onNewGConn=None, onNewGConnArgs=None):
+	def __init__(self, files, onNewGConn=None, onNewGConnArgs=None, onDeleteGConn=None, onDeleteGConnArgs=None):
 		self.onNewGConn = onNewGConn
 		self.onNewGConnArgs = onNewGConnArgs
+		self.onDeleteGConn = onDeleteGConn
+		self.onDeleteGConnArgs = onDeleteGConnArgs
 		self.readConfigFiles (files)
 
 	def readConfigFiles(self, files):
 		self.config = ConfigParser.SafeConfigParser ()
 		self.config.read (files)
 
-	def showConfigWindow(self, gConns, gConns_lock, onNewGConn=None, onNewGConnArgs=None):
+	def showConfigWindow(self, gConns, gConns_lock, onNewGConn=None, onNewGConnArgs=None, onDeleteGConn=None, onDeleteGConnArgs=None):
 		gtk.gdk.threads_enter ()
 		n = NotifierConfigWindow (
 				self,
 				gConns,
 				gConns_lock,
 				(onNewGConn, self.onNewGConn)[onNewGConn == None],
-				(onNewGConnArgs, self.onNewGConnArgs)[onNewGConnArgs == None]
+				(onNewGConnArgs, self.onNewGConnArgs)[onNewGConnArgs == None],
+				(onDeleteGConn, self.onDeleteGConn)[onDeleteGConn == None],
+				(onDeleteGConnArgs, self.onDeleteGConnArgs)[onDeleteGConnArgs == None]
 				)
 		gtk.gdk.threads_leave ()
 		n.close_event.wait ()
@@ -143,6 +155,20 @@ class NotifierConfig:
 	def set_onNewGConn(self, onNewGConn, onNewGConnArgs=None):
 		self.onNewGConn = onNewGConn
 		self.onNewGConnArgs = onNewGConnArgs
+
+	def set_onDeleteGConn(self, onDeleteGConn, onDeleteGConnArgs=None):
+		"""This method is called *AFTER* popping gConn from gConns, but *BEFORE* deleting the removed gConn
+
+		def onDeleteGConn (gConn, onDeleteGConnArgs):
+			...
+		
+		if you return 'False', gConn will not be deleted, BUT it will also NOT be re-added to gConns (although YOU
+		are free to do that -- do not forget to return False if you do this however!!)
+
+		ANY other return value will allow gConn to be deleted
+		"""
+		self.onDeleteGConn = onDeleteGConn
+		self.onDeleteGConnArgs = onDeleteGConnArgs
 
 	def get_usernames(self):
 		return self.config.sections ()

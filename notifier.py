@@ -136,6 +136,9 @@ def onNewGConn(gConn, status_icon):
 	gConn.start ()
 	updateTooltip (status_icon, gtk_locked=True)
 
+def onDeleteGConn(gConn, status_icon):
+	updateTooltip (status_icon, gtk_locked=True)
+
 def preferences(gConn=None):
 	logger.debug ('preferences called')
 	# XXX: ugly
@@ -173,6 +176,7 @@ def main():
 	status_icon = gmailStatusIcon.GmailStatusIcon (on_update, on_tellMe, on_preferences, on_about, on_close, args=gConns)
 	gtk.gdk.threads_leave ()
 	config.set_onNewGConn (onNewGConn, status_icon)
+	config.set_onDeleteGConn (onDeleteGConn, status_icon)
 	logger.debug ('status icon initialized')
 
 	#Create gConn objects for each username
