@@ -445,19 +445,8 @@ OPTIONAL ARGUMENTS:
 	def __init__(
 			self,
 			username=None,
-			password=None,
-			proxy=None,
-			onUpdate=None,
-			onUpdateArgs=None,
-			onNewMail=None,
-			onNewMailArgs=None,
-			onDisconnect=None,
-			onDisconnectArgs=None,
-			onAuthenticationError=None,
-			onAuthenticationErrorArgs=None,
 			notifications=True,
 			start=False,
-			frequency=TIMEOUT,
 			disconnect_threshold=THRESHOLD,
 			config=None,
 			logLevel=logging.WARNING
@@ -467,34 +456,27 @@ OPTIONAL ARGUMENTS:
 		logging.basicConfig (level=self.logLevel, format="%(asctime)s [%(levelname)s]\t{%(thread)s} %(name)s:%(lineno)d %(message)s")
 		self.logger = logging.getLogger ('gmailLib')
 		
-		if (username == None or password == None) and config == None:
-			raise TypeError ('One of username/password or config must be defined!')
+		# Since we provide a relatively flexible init, we have to do a little sanity checking on arguments
+		if username == None and config == None:
+			raise TypeError ('One of username or config must be defined!')
+		if username != None and config == None and start == True:
+			raise TypeError ('Cannot start with just a username (and no config)')
 		
 		# Copy in relevant initialization variables
+		self.username = username
 		self.notifications = notifications
 		if (notifications):
 			import pynotify
-			if not pynotify.init ('Gmail Notifier 2'):
+			if not pynotify.init ('Gmail Notifier'):
 				self.logger.critical ("Error loading / initializing pynotify module")
 				raise ImportError
-		
-		self.onUpdate = onUpdate
-		self.onUpdateArgs = onUpdateArgs
-		
-		self.onNewMail = onNewMail
-		self.onNewMailArgs = onNewMailArgs
-		
-		self.onDisconnect = onDisconnect
-		self.onDisconnectArgs = onDisconnectArgs
-		
-		self.frequency = frequency
 		self.disconnect_threshold = disconnect_threshold
 		
 		# Set up threading
 		self.lock = threading.RLock ()
 		self.network_lock = threading.Lock ()
 		
-		# Initialize locals
+		# Initialize state
 		self.started = False
 		self.events = list ()
 		self.shown = list ()
@@ -502,19 +484,28 @@ OPTIONAL ARGUMENTS:
 		self.auth_error_running = False
 		self.last_modified = 0
 		self.disconnected = True
+		self.onNewMail = None
+		self.onUpdate = None
+		self.onAuthenticationError = None
+		self.onDisconnect = None
 		
-		if config:
-			self.logger.debug ('Creating a new gConn with configure')
-			self.configure (config)
-			try:
-				frequency = config.get_ac_polling (self.username)
-			except AttributeError:
-				raise self.CancelledError
-		else:
-			self.username = username
-			self.resetCredentials (username, password, proxy)
-		
+		# Set up the XML parser
 		self.xml_parser = GmailXmlHandler()
+		
+		# Read in configuration if provided
+		if config:
+			if self.username:
+				# We want data on the username from the provided config file
+				self.resetCredentials (self.username, config.get_password (self.username), config.get_proxy (self.username))
+				self.frequency = config.get_ac_polling (self.username)
+			else:
+				# We are creating a new gConn here w/ a new entry
+				self.logger.debug ('Creating a new gConn with configure')
+				self.configure (config)
+				try:
+					frequency = config.get_ac_polling (self.username)
+				except AttributeError:
+					raise self.CancelledError
 		
 		# Start the gConn object if requested (not default)
 		if (start):
@@ -537,17 +528,29 @@ OPTIONAL ARGUMENTS:
 		"""(nonblocking) Spawns an updater thread that will poll GMail. You may poll the gConn object for updates,
 		or register a callback as gConn.onNewMail (NOTE: Once a gConn object is start'ed, use gConn.set_onNewMail to
 		change this in a thread-safe manner)"""
-		self.lock.acquire()
-		if self.started:
-			self.lock.release()
-			raise self.AlreadyInitalizedError
+		with self.lock:
+			if self.started:
+				raise self.AlreadyInitalizedError
 
-		self.thread = threading.Thread (group=None, target=self.updater)
-		self.thread.daemon = True
-		self.thread.name = 'GmailLib: gConn::updater - ' + self.username
-		self.thread.start ()
-		self.started = True
-		self.lock.release()
+			self.thread = threading.Thread (group=None, target=self.updater)
+			self.thread.daemon = True
+			self.thread.name = 'GmailLib: gConn::updater - ' + self.username
+			self.thread.start ()
+			self.started = True
+
+	def restart(self, frequency):
+		"""(nonblocking) Call this after a call to stop to continue the updater thread again"""
+		with self.lock:
+			self.frequency = frequency
+			for event in self.events ():
+				event.set ()
+
+	def stop(self):
+		"""(nonblocking) Stops the updater thread, returns the currently set frequency, which can be passed to continue later"""
+		with self.lock:
+			freq = self.frequency
+			self.frequency = 0
+			return freq
 
 	def set_onUpdate(self, onUpdate, onUpdateArgs=None):
 		"""Sets the onUpdate callback.  This function is called whenever the GMail atom feed it updated.  This is
@@ -562,10 +565,9 @@ OPTIONAL ARGUMENTS:
 		*** This callback is called _whenever_ gConn determines there are 'new' unread emails.  It may be called from
 		the updater thread OR from a call to gConn.get* with Update=None or Update=True ***
 		"""
-		self.lock.acquire ()
-		self.onUpdate = onUpdate
-		self.onUpdateArgs = onUpdateArgs
-		self.lock.release ()
+		with self.lock:
+			self.onUpdate = onUpdate
+			self.onUpdateArgs = onUpdateArgs
 
 	def set_onNewMail(self, onNewMail, onNewMailArgs=None):
 		"""Sets the onNewMail callback.  This function is called whenever a 'new' unread email is recieved.
@@ -578,10 +580,9 @@ OPTIONAL ARGUMENTS:
 		*** This callback is called _whenever_ gConn determines there are 'new' unread emails.  It may be called from
 		the updater thread OR from a call to gConn.get* with Update=None or Update=True ***
 		"""
-		self.lock.acquire ()
-		self.onNewMail = onNewMail
-		self.onNewMailArgs = onNewMailArgs
-		self.lock.release ()
+		with self.lock:
+			self.onNewMail = onNewMail
+			self.onNewMailArgs = onNewMailArgs
 
 	def set_onDisconnect(self, onDisconnect, onDisconnectArgs=None):
 		"""Sets the onDisconnect callback.  Called whenever time.time() - gConn.last_update > gConn.disconnect_threshold.
@@ -592,10 +593,9 @@ OPTIONAL ARGUMENTS:
 		*** This callback is called _whenever_ gConn determines it is disconnected.  It may be called from
 		the updater thread OR from a call to gConn.get* with Update=None or Update=True ***
 		"""
-		self.lock.acquire ()
-		self.onDisconnect = onDisconnect
-		self.onDisconnectArgs = onDisconnectArgs
-		self.lock.release ()
+		with self.lock:
+			self.onDisconnect = onDisconnect
+			self.onDisconnectArgs = onDisconnectArgs
 
 	def set_onAuthenticationError(self, onAuthenticationError, onAuthenticationErrorArgs=None):
 		"""Sets the onAuthenticationError callback.  In the event of an authentication error (incorrect username/password),
@@ -610,25 +610,27 @@ OPTIONAL ARGUMENTS:
 
 		Note: An authentication error will suspend the updater thread until a call to resetCredentials is made
 		"""
-		self.lock.acquire ()
-		self.onAuthenticationError = onAuthenticationError
-		self.onAuthenticationErrorArgs = onAuthenticationErrorArgs
-		self.lock.release ()
+		with self.lock:
+			self.onAuthenticationError = onAuthenticationError
+			self.onAuthenticationErrorArgs = onAuthenticationErrorArgs
 
 	def set_frequency(self, frequency=TIMEOUT):
 		"""Sets frequency (in secs), if unspecified, reset to default (20). Note, it may take up to
 		frequency (previous value) seconds for this update to take effect.  If your goal is to suspend
 		the notifier, a better choice would likely be to stop() and then start again later
 		"""
-		self.lock.acquire ()
-		self.frequency = frequency
-		self.lock.release ()
+		with self.lock:
+			self.frequency = frequency
 
 	def set_logLevel(self, logLevel):
 		"""Sets the log level for gmailLib. Expects a log level from the standard python logging module (e.g. logging.DEBUG)"""
-		self.lock.acquire ()
-		self.logger.setLevel (logLevel)
-		self.lock.release ()
+		with self.lock:
+			self.logger.setLevel (logLevel)
+
+	def set_showNotifications(self, notifications=True):
+		"""Should this object display a notifications automatically on new mail?"""
+		with self.lock:
+			self.notifications = notifications
 
 	def update(self, async=False, force_callbacks=False):
 		"""Force an update. If the async parameter is True, a one-off thread will be spawned to try to update. Otherwise,
@@ -657,16 +659,20 @@ OPTIONAL ARGUMENTS:
 		while True:
 			self.lock.acquire ()
 			locals.auth_error = self.auth_error
+			locals.frequency = self.frequency
 			self.lock.release ()
-			if not locals.auth_error:
+			if not locals.auth_error and (locals.frequency not in (0,-1)):
 				try:
 					self.refreshInfo ()
 				except self.ParseError as e:
 					self.logger.warning (str(e))
-			self.lock.acquire ()
-			locals.frequency = self.frequency
-			self.lock.release ()
-			locals.event.wait (timeout=locals.frequency)
+			if locals.frequency == 0 or locals.frequency == -1:
+				locals.event.wait ()
+			elif locals.frequency < 20:
+				logger.warning (self.getUsername () + ': Bad polling frequency (' + str (locals.frequency) + ') defaulting to ' + str (self.TIMEOUT))
+				locals.event.wait (timeout=self.TIMEOUT)
+			else:
+				locals.event.wait (timeout=locals.frequency)
 			locals.event.clear ()
 
 	def notify(self, emails=None, check_connected=True):

@@ -106,6 +106,7 @@ class NotifierConfigWindow:
 
 	def deleteAccount(self, widget, username):
 		self.config.config.remove_section (username)
+		self.config.config.write (open (os.path.expanduser ('~/.gmail-notifier.conf'), 'w'))
 		self.window_vbox.remove (self.accounts[username][0])
 		with self.gConns_lock:
 			gConn = self.gConns.pop (username)
@@ -162,8 +163,9 @@ class NotifierConfig:
 		def onDeleteGConn (gConn, onDeleteGConnArgs):
 			...
 		
-		if you return 'False', gConn will not be deleted, BUT it will also NOT be re-added to gConns (although YOU
-		are free to do that -- do not forget to return False if you do this however!!)
+		if you return 'False', the gConn object will not be deleted, but it will already be removed from config
+		and gConns. Do not add it back to gConns, this is mostly designed for additional cleanup before the
+		gConn is destroyed, not to prevent its destruction
 
 		ANY other return value will allow gConn to be deleted
 		"""

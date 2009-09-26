@@ -33,6 +33,65 @@ config = NotifierConfig ([sys.path[0]+CONF_NAME, os.path.expanduser ('~/.' + CON
 config_lock = threading.RLock ()
 prefs_lock = threading.Lock ()
 
+#####################
+# Utility Functions #
+#####################
+
+def updateTooltip(status_icon, gtk_locked=False):
+	locals = threading.local ()
+	locals.tooltip = 'Gmail Notifier'
+	locals.newmail = False
+	locals.authErr = False
+	with gConns_lock:
+		for gConn in gConns.values ():
+			if gConn.isAuthenticationError ():
+				locals.authErr = True
+				locals.tooltip += ('\n' + gConn.getUsername () + ': Authentication Error')
+			elif gConn.getUnreadMessageCount (update=False):
+				locals.newmail = True
+				locals.cnt = gConn.getUnreadMessageCount (update=False)
+				locals.tooltip += ('\n' + gConn.getUsername () + ': ' + str (locals.cnt) + ' unread message' + ('s','')[locals.cnt == 1])
+			elif not gConn.isConnected (update=False):
+				# There is a _very_ small window before one of onUpdate,onAuthenticationError,onDisconnect has been called
+				locals.tooltip += ('\n' + gConn.getUsername () + ': Connecting...')
+			else:
+				locals.tooltip += ('\n' + gConn.getUsername () + ': No unread messages')
+
+	if not gtk_locked:
+		gtk.gdk.threads_enter ()
+	status_icon.set_tooltip (locals.tooltip)
+	if locals.authErr:
+		status_icon.set_from_file (status_icon.TRAY_AUTHERR)
+	elif locals.newmail:
+		status_icon.set_from_file (status_icon.TRAY_NEWMAIL)
+	else:
+		status_icon.set_from_file (status_icon.TRAY_NOMAIL)
+	if not gtk_locked:
+		gtk.gdk.threads_leave ()
+
+
+def preferences(gConn=None):
+	# Utility thread to spawn preferences in a separate window / thread
+	logger.debug ('preferences called')
+	# XXX: ugly
+	if prefs_lock.locked (): # Why do Lock's not provide blocking=0 like RLock's?
+		logger.debug ('do not allow multiple instances of preferences at once')
+	else:
+		prefs_lock.acquire ()
+
+	with config_lock:
+		if gConn:
+			gConn.configure (config)
+		else:
+			config.showConfigWindow (gConns, gConns_lock)
+
+	prefs_lock.release ()
+
+
+##############################
+# Callbacks from status_icon #
+##############################
+
 def on_update(widget, user_params=None):
 	logger.debug ('on_update clicked')
 	with gConns_lock:
@@ -68,39 +127,9 @@ def on_about(widget, user_params=None):
 def on_close(widget, user_params=None):
 	exit (0)
 
-
-def updateTooltip(status_icon, gtk_locked=False):
-	locals = threading.local ()
-	locals.tooltip = 'Gmail Notifier'
-	locals.newmail = False
-	locals.authErr = False
-	with gConns_lock:
-		for gConn in gConns.values ():
-			if gConn.isAuthenticationError ():
-				locals.authErr = True
-				locals.tooltip += ('\n' + gConn.getUsername () + ': Authentication Error')
-			elif gConn.getUnreadMessageCount (update=False):
-				locals.newmail = True
-				locals.cnt = gConn.getUnreadMessageCount (update=False)
-				locals.tooltip += ('\n' + gConn.getUsername () + ': ' + str (locals.cnt) + ' unread message' + ('s','')[locals.cnt == 1])
-			elif not gConn.isConnected (update=False):
-				# There is a _very_ small window before one of onUpdate,onAuthenticationError,onDisconnect has been called
-				locals.tooltip += ('\n' + gConn.getUsername () + ': Connecting...')
-			else:
-				locals.tooltip += ('\n' + gConn.getUsername () + ': No unread messages')
-
-	if not gtk_locked:
-		gtk.gdk.threads_enter ()
-	status_icon.set_tooltip (locals.tooltip)
-	if locals.authErr:
-		status_icon.set_from_file (status_icon.TRAY_AUTHERR)
-	elif locals.newmail:
-		status_icon.set_from_file (status_icon.TRAY_NEWMAIL)
-	else:
-		status_icon.set_from_file (status_icon.TRAY_NOMAIL)
-	if not gtk_locked:
-		gtk.gdk.threads_leave ()
-
+###################
+# gConn callbacks #
+###################
 
 def onUpdate(gConn, status_icon):
 	logger.debug ('onUpdate called by ' + gConn.getUsername ())
@@ -122,11 +151,24 @@ def onAuthenticationError(gConn, status_icon):
 	locals.n = pynotify.Notification ('Authentication Error!', gConn.getUsername () + ' failed to authenticate')
 	locals.n.show ()
 
-def onPowerChange(args, kwargs):
-	print 'power change'
-	print '  args: ' + str(args)
-	print 'kwargs: ' + str(kwargs)
 
+##################
+# dbus callbacks #
+##################
+
+def onPowerChange(args, kwargs):
+	with gConns_lock:
+		for gConn in gConns.values ():
+			if dev.GetProperty ('ac_adapter.present'):
+				logger.debug ('POWER: ac adapter present')
+				gConn.set_frequency (gConn.ac_frequency)
+			else:
+				logger.debug ('POWER: on battery')
+				gConn.set_frequency (gConn.battery_frequency)
+
+##########################
+# gConn config callbacks #
+##########################
 
 def onNewGConn(gConn, status_icon):
 	# Already have gtk.gdk.threads () and gConns_lock
@@ -139,35 +181,10 @@ def onNewGConn(gConn, status_icon):
 def onDeleteGConn(gConn, status_icon):
 	updateTooltip (status_icon, gtk_locked=True)
 
-def preferences(gConn=None):
-	logger.debug ('preferences called')
-	# XXX: ugly
-	if prefs_lock.locked (): # Why do Lock's not provide blocking=0 like RLock's?
-		logger.debug ('do not allow multiple instances of preferences at once')
-	else:
-		prefs_lock.acquire ()
 
-	with config_lock:
-		if gConn:
-			gConn.configure (config)
-		else:
-			config.showConfigWindow (gConns, gConns_lock)
-
-	prefs_lock.release ()
-
-
-def PowerThread(dev, gConns):
-	from time import sleep
-	while True:
-		for gConn in gConns:
-			if dev.GetProperty ('ac_adapter.present'):
-				logger.debug ('POWER: ac adapter present')
-				gConn.set_frequency ()
-			else:
-				logger.debug ('POWER: on battery')
-				gConn.set_frequency (60)
-		sleep (60)
-
+########
+# Main #
+########
 
 def main():
 
@@ -186,8 +203,7 @@ def main():
 				{username:
 				gmailLib.GmailConn (
 					username,
-					config.get_password (username),
-					frequency=config.get_ac_polling (username),
+					config=config,
 					logLevel=logging.DEBUG
 					)
 				})
@@ -213,7 +229,8 @@ def main():
 
 	#Try to hook into dbus so we can monitor power state
 	try:
-		raise ImportError	# XXX
+		# XXX: WHAT? So, I can't find information on how to pass arguments to dbus callbacks, including
+		# the dbus device object itself -- so it's global for now, which is UGLY. Ugh...
 		import dbus
 		from dbus.mainloop.glib import DBusGMainLoop
 		from dbus.mainloop.glib import threads_init as dbus_threads_init
@@ -225,10 +242,9 @@ def main():
 		hal = dbus.Interface (hal_obj, 'org.freedesktop.Hal.Manager')
 		
 		dev_obj = bus.get_object ("org.freedesktop.Hal", hal.FindDeviceByCapability ("ac_adapter")[0])
+		global dev
 		dev = dbus.Interface (dev_obj, "org.freedesktop.Hal.Device")
 		dev.connect_to_signal ("PropertyModified", onPowerChange)
-
-		threading.Thread (target=PowerThread, name='PowerThread', args=(dev, gConns)).start ()
 	except ImportError:
 		pass
 
