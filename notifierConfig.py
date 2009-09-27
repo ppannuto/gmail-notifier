@@ -25,8 +25,13 @@ class NotifierConfigWindow:
 	def buildWindow(self):
 		# Set up the top-level window
 		self.window = gtk.Dialog ()
-		self.window.set_title ('GMail Notifier Preferences')
+		self.window.set_title ('Preferences')
+		try:
+			self.window.set_icon_from_file ('nomail.png')
+		except:
+			pass
 		self.window.set_position (gtk.WIN_POS_CENTER)
+		self.window.set_default_size (250,100)
 
 		# Add a vbox to hold the window contents
 		self.window_vbox = self.window.get_content_area ()

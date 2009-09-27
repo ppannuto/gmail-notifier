@@ -52,7 +52,12 @@ class GmailConfigWindow():
 			self.window.set_title ('Configure ' + username)
 		else:
 			self.window.set_title ('Configure a new account')
+		try:
+			self.window.set_icon_from_file ('nomail.png')
+		except:
+			pass
 		self.window.set_position (gtk.WIN_POS_CENTER)
+		self.window.set_default_size (400, 100)
 		self.window.set_modal (True)
 
 		# Add a vbox to hold the window contents
