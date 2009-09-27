@@ -39,7 +39,7 @@ class GmailConfigWindow():
 		self.close_event = threading.Event ()
 
 		# Copy objects
-		self.config = config.config
+		self.config = config
 		self.gConn = gConn
 
 		if not username and gConn:
@@ -103,7 +103,7 @@ class GmailConfigWindow():
 		self.proxy_entry = gtk.Entry ()
 		self.proxy_entry.connect ('activate', self.onClose)
 		try:
-			self.proxy_entry.set_text (self.config.get (username, 'proxy'))
+			self.proxy_entry.set_text (self.config.get_proxy (username))
 		except ConfigParser.Error:
 			pass
 		self.expander_table.attach (self.proxy_label, 0, 1, 0, 1)
@@ -117,7 +117,7 @@ class GmailConfigWindow():
 		self.ac_polling_entry.set_increments (5, 5)
 		self.ac_polling_entry.set_range (20, 600)
 		try:
-			self.ac_polling_entry.set_value (self.config.getint (username, 'ac_polling'))
+			self.ac_polling_entry.set_value (self.config.get_ac_polling (username))
 		except ConfigParser.Error:
 			self.ac_polling_entry.set_value (self.DEFAULT_AC_POLL)
 		self.expander_table.attach (self.ac_polling_label, 0, 1, 1, 2)
@@ -131,7 +131,7 @@ class GmailConfigWindow():
 		self.battery_polling_entry.set_increments (5, 5)
 		self.battery_polling_entry.set_range (20, 600)
 		try:
-			self.battery_polling_entry.set_value (self.config.getint (username, 'battery_polling'))
+			self.battery_polling_entry.set_value (self.config.get_battery_polling (username, consider_disable=False))
 		except ConfigParser.Error:
 			self.battery_polling_entry.set_value (self.DEFAULT_BATTERY_POLL)
 		self.expander_table.attach (self.battery_polling_label, 0, 1, 2, 3)
@@ -141,7 +141,7 @@ class GmailConfigWindow():
 
 		self.battery_disable_checkbutton = gtk.CheckButton ('Disable on battery')
 		try:
-			self.battery_disable_checkbutton.set_active (self.config.getboolean (username, 'battery_disable'))
+			self.battery_disable_checkbutton.set_active (self.config.get_battery_disable (username))
 		except ConfigParser.Error:
 			self.battery_disable_checkbutton.set_active (False)
 		self.battery_disable_checkbutton.connect ('toggled', self.onBatteryEnabledToggle)
@@ -205,7 +205,7 @@ class GmailConfigWindow():
 			return False
 
 		try:
-			config_password = self.config.get (username, 'password')
+			config_password = self.config.get_password (username)
 		except ConfigParser.Error:
 			config_password = None
 
@@ -220,21 +220,18 @@ class GmailConfigWindow():
 		
 		if username.find ('@gmail.com') == -1:
 			username += '@gmail.com'
-		try:
-			self.config.add_section (username)
-		except ConfigParser.DuplicateSectionError:
-			pass
-		self.config.set (username, 'password', (password, config_password)[password == ''])
-		self.config.set (username, 'proxy', proxy)
-		self.config.set (username, 'ac_polling', str (ac_polling))
-		self.config.set (username, 'battery_polling', str (battery_polling))
-		self.config.set (username, 'battery_disable', str (battery_disable))
-		self.config.write (open (os.path.expanduser ('~/.gmail-notifier.conf'), 'w'))
+		self.config.add_username (username)
+		self.config.set_password (username, (password, config_password)[password == ''])
+		self.config.set_proxy (username, proxy)
+		self.config.set_ac_polling (username, str (ac_polling))
+		self.config.set_battery_polling (username, str (battery_polling))
+		self.config.set_battery_disable (username, str (battery_disable))
+		self.config.write ()
 
 		if self.gConn:
 			self.gConn.set_ac_frequency (ac_polling)
 			self.gConn.set_battery_frequency ((battery_polling,0)[battery_disable])
-			self.gConn.resetCredentials (username, self.config.get (username, 'password'), self.config.get (username, 'proxy'))
+			self.gConn.resetCredentials (username, self.config.get_password (username), self.config.get_proxy (username))
 
 		self.window.destroy ()
 		self.close_event.set ()

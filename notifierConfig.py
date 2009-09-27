@@ -137,6 +137,9 @@ class NotifierConfig:
 		self.onDeleteGConnArgs = onDeleteGConnArgs
 		self.readConfigFiles (files)
 
+	def write(self):
+		self.config.write (open (os.path.expanduser ('~/.gmail-notifier.conf'), 'w'))
+
 	def readConfigFiles(self, files):
 		self.config = ConfigParser.SafeConfigParser ()
 		self.config.read (files)
@@ -177,14 +180,43 @@ class NotifierConfig:
 	def get_usernames(self):
 		return self.config.sections ()
 
+	def add_username(self, username, suppress_duplicates=True):
+		try:
+			self.config.add_section (username)
+		except ConfigParser.DuplicateSectionError:
+			if not suppress_duplicates:
+				raise
+
 	def get_password(self, username):
 		return self.config.get (username, 'password')
+
+	def set_password(self, username, password):
+		self.config.set (username, 'password', password)
 
 	def get_proxy(self, username):
 		return self.config.get (username, 'proxy')
 
+	def set_proxy(self, username, proxy):
+		self.config.set (username, 'proxy', proxy)
+
 	def get_ac_polling(self, username):
 		return self.config.getint (username, 'ac_polling')
 
-	def get_battery_polling(self, username):
-		return (self.config.getint (username, 'battery_polling'),0)[self.config.getboolean (username, 'battery_disable')]
+	def set_ac_polling(self, username, ac_polling):
+		self.config.set (username, 'ac_polling', str (ac_polling))
+
+	def get_battery_polling(self, username, consider_disable=True):
+		if consider_disable:
+			return (self.config.getint (username, 'battery_polling'),0)[self.config.getboolean (username, 'battery_disable')]
+		else:
+			return self.config.getint (username, 'battery_polling')
+
+	def set_battery_polling(self, username, battery_polling, battery_disable=False):
+		self.config.set (username, 'battery_polling', str (battery_polling))
+		self.config.set (username, 'battery_disable', str (battery_disable))
+
+	def get_battery_disable(self, username):
+		return self.config.getboolean (username, 'battery_disable')
+
+	def set_battery_disable(self, username, battery_disable):
+		self.config.set (username, 'battery_disable', str (battery_disable))
