@@ -28,12 +28,18 @@ class Keyring(object):
 		except gkey.NoMatchError:
 			return False
 
-	def get_credentials(self):
+	def get_credentials(self, user):
 		attrs = {"server": self._server, "protocol": self._protocol}
-		items = gkey.find_items_sync(gkey.ITEM_NETWORK_PASSWORD, attrs)
-		return (items[0].attributes["user"], items[0].secret)
+		try:
+			items = gkey.find_items_sync(gkey.ITEM_NETWORK_PASSWORD, attrs)
+			for item in items:
+				if item.attributes["user"] == user:
+					return item.secret
+		except gkey.NoMatchError:
+			pass
+		return None
 
-	def set_credentials(self, (user, pw)):
+	def set_credentials(self, user, pw):
 		attrs = {
 				"user": user,
 				"server": self._server,
@@ -42,7 +48,7 @@ class Keyring(object):
 		gkey.item_create_sync(gkey.get_default_keyring_sync(),
 				gkey.ITEM_NETWORK_PASSWORD, self._name, attrs, pw, True)
 
-	def delete_credentials(self, (user, pw)):
+	def delete_credentials(self, user, pw=None):
 		attrs = {
 				"user":user,
 				"server":self._server,

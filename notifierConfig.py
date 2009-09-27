@@ -4,6 +4,7 @@ import logging
 import threading
 import ConfigParser
 from gmailLib import GmailConn
+import keyring
 
 class NotifierConfigWindow:
 
@@ -106,7 +107,8 @@ class NotifierConfigWindow:
 
 	def deleteAccount(self, widget, username):
 		self.config.config.remove_section (username)
-		self.config.config.write (open (os.path.expanduser ('~/.gmail-notifier.conf'), 'w'))
+		self.config.write ()
+		self.config.del_password (username)
 		self.window_vbox.remove (self.accounts[username][0])
 		with self.gConns_lock:
 			gConn = self.gConns.pop (username)
@@ -136,6 +138,8 @@ class NotifierConfig:
 		self.onDeleteGConn = onDeleteGConn
 		self.onDeleteGConnArgs = onDeleteGConnArgs
 		self.readConfigFiles (files)
+
+		self.Keyring = keyring.Keyring ('gmail-notifier', 'mail.google.com', 'https')
 
 	def write(self):
 		self.config.write (open (os.path.expanduser ('~/.gmail-notifier.conf'), 'w'))
@@ -188,10 +192,15 @@ class NotifierConfig:
 				raise
 
 	def get_password(self, username):
-		return self.config.get (username, 'password')
+		return self.Keyring.get_credentials (username)
+		#return self.config.get (username, 'password')
 
 	def set_password(self, username, password):
-		self.config.set (username, 'password', password)
+		self.Keyring.set_credentials (username, password)
+		#self.config.set (username, 'password', password)
+
+	def del_password(self, username):
+		self.Keyring.delete_credentials (username)
 
 	def get_proxy(self, username):
 		return self.config.get (username, 'proxy')
