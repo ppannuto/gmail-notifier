@@ -114,8 +114,10 @@ class NotifierConfigWindow:
 				if self.onDeleteGConn (gConn, self.onDeleteGConnArgs) == False:
 					pass
 				else:
+					gConn.stop ()
 					del gConn
 			else:
+				gConn.stop ()
 				del gConn
 
 
@@ -185,4 +187,4 @@ class NotifierConfig:
 		return self.config.getint (username, 'ac_polling')
 
 	def get_battery_polling(self, username):
-		return self.config.getint (username, 'battery_polling')
+		return (self.config.getint (username, 'battery_polling'),0)[self.config.getboolean (username, 'battery_disable')]

@@ -42,25 +42,32 @@ def updateTooltip(status_icon, gtk_locked=False):
 	locals.tooltip = 'Gmail Notifier'
 	locals.newmail = False
 	locals.authErr = False
+	locals.noConn = False
 	with gConns_lock:
-		for gConn in gConns.values ():
-			if gConn.isAuthenticationError ():
-				locals.authErr = True
-				locals.tooltip += ('\n' + gConn.getUsername () + ': Authentication Error')
-			elif gConn.getUnreadMessageCount (update=False):
-				locals.newmail = True
-				locals.cnt = gConn.getUnreadMessageCount (update=False)
-				locals.tooltip += ('\n' + gConn.getUsername () + ': ' + str (locals.cnt) + ' unread message' + ('s','')[locals.cnt == 1])
-			elif not gConn.isConnected (update=False):
-				# There is a _very_ small window before one of onUpdate,onAuthenticationError,onDisconnect has been called
-				locals.tooltip += ('\n' + gConn.getUsername () + ': Connecting...')
-			else:
-				locals.tooltip += ('\n' + gConn.getUsername () + ': No unread messages')
+		if len (gConns) == 0:
+			locals.tooltip += ('\nNo accounts configured')
+			locals.noConn = True
+		else:
+			for gConn in gConns.values ():
+				if gConn.isAuthenticationError ():
+					locals.authErr = True
+					locals.tooltip += ('\n' + gConn.getUsername () + ': Authentication Error')
+				elif gConn.getUnreadMessageCount (update=False):
+					locals.newmail = True
+					locals.cnt = gConn.getUnreadMessageCount (update=False)
+					locals.tooltip += ('\n' + gConn.getUsername () + ': ' + str (locals.cnt) + ' unread message' + ('s','')[locals.cnt == 1])
+				elif not gConn.isConnected (update=False):
+					# There is a _very_ small window before one of onUpdate,onAuthenticationError,onDisconnect has been called
+					locals.tooltip += ('\n' + gConn.getUsername () + ': Connecting...')
+				else:
+					locals.tooltip += ('\n' + gConn.getUsername () + ': No unread messages')
 
 	if not gtk_locked:
 		gtk.gdk.threads_enter ()
 	status_icon.set_tooltip (locals.tooltip)
-	if locals.authErr:
+	if locals.noConn:
+		status_icon.set_from_file (status_icon.TRAY_NOCONN)
+	elif locals.authErr:
 		status_icon.set_from_file (status_icon.TRAY_AUTHERR)
 	elif locals.newmail:
 		status_icon.set_from_file (status_icon.TRAY_NEWMAIL)
@@ -84,6 +91,7 @@ def preferences(gConn=None):
 			gConn.configure (config)
 		else:
 			config.showConfigWindow (gConns, gConns_lock)
+			onPowerChange (None, None)
 
 	prefs_lock.release ()
 
@@ -160,11 +168,11 @@ def onPowerChange(args, kwargs):
 	with gConns_lock:
 		for gConn in gConns.values ():
 			if dev.GetProperty ('ac_adapter.present'):
-				logger.debug ('POWER: ac adapter present')
-				gConn.set_frequency (gConn.ac_frequency)
+				logger.debug ('POWER: ac adapter present - ' + str(args))
+				gConn.set_power (ac=True)
 			else:
-				logger.debug ('POWER: on battery')
-				gConn.set_frequency (gConn.battery_frequency)
+				logger.debug ('POWER: on battery - ' + str(args))
+				gConn.set_power (ac=False)
 
 ##########################
 # gConn config callbacks #
@@ -231,6 +239,14 @@ def main():
 	try:
 		# XXX: WHAT? So, I can't find information on how to pass arguments to dbus callbacks, including
 		# the dbus device object itself -- so it's global for now, which is UGLY. Ugh...
+		#
+		# While we're at annoying design phenomeona, I would like to put all of this into gConn, but
+		# the object doesn't have a native mainloop (nor does it require one to operate), so it does
+		# not seem logical to place it there. I think this is currently a weakness of the python dbus
+		# interface, but not a critical issue I suppose
+		#
+		# The result of this is that onPowerChange should be called once every time a new gConn object
+		# is created so that is has the correct power state. Ugly, but effective
 		import dbus
 		from dbus.mainloop.glib import DBusGMainLoop
 		from dbus.mainloop.glib import threads_init as dbus_threads_init
@@ -245,8 +261,12 @@ def main():
 		global dev
 		dev = dbus.Interface (dev_obj, "org.freedesktop.Hal.Device")
 		dev.connect_to_signal ("PropertyModified", onPowerChange)
+		
+		onPowerChange (None, None)
 	except ImportError:
 		pass
+
+	updateTooltip (status_icon)
 
 	gtk.gdk.threads_enter ()
 	gtk.main ()

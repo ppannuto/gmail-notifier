@@ -6,7 +6,7 @@ import gtk
 TRAY_NOCONN = 'noconnection.png'
 TRAY_NOMAIL = 'nomail.png'
 TRAY_NEWMAIL = 'newmail.png'
-TRAY_AUTHERR = 'noconnection.png'
+TRAY_AUTHERR = 'autherr.png'
 
 class GmailStatusIcon(gtk.StatusIcon):
 

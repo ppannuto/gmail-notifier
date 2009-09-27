@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# gmailLib 0.1 by Pat Pannuto <pat.pannuto@gmail.com>
+# gmailLib 0.5 by Pat Pannuto <pat.pannuto@gmail.com>
 # based loosely on gmailatom 0.0.1 by Juan Grande <juan.grande@gmail.com> from the original gmail-notify
 
 from xml import sax
@@ -95,7 +95,7 @@ class GmailConfigWindow():
 		self.window_vbox.pack_start (self.expander)
 		self.expander.show ()
 
-		self.expander_table = gtk.Table (rows=3, columns=2)
+		self.expander_table = gtk.Table (rows=4, columns=2)
 		self.expander.add (self.expander_table)
 		self.expander_table.show ()
 
@@ -139,6 +139,18 @@ class GmailConfigWindow():
 		self.battery_polling_label.show ()
 		self.battery_polling_entry.show ()
 
+		self.battery_disable_checkbutton = gtk.CheckButton ('Disable on battery')
+		try:
+			self.battery_disable_checkbutton.set_active (self.config.getboolean (username, 'battery_disable'))
+		except ConfigParser.Error:
+			self.battery_disable_checkbutton.set_active (False)
+		self.battery_disable_checkbutton.connect ('toggled', self.onBatteryEnabledToggle)
+		self.expander_table.attach (self.battery_disable_checkbutton, 1, 2, 3, 4)
+		self.battery_disable_checkbutton.show ()
+		
+		self.battery_polling_entry.set_sensitive (not self.battery_disable_checkbutton.get_active ())
+
+
 		# Create an hbox to hold Cancel/Close
 		self.hbox = gtk.HBox ()
 		self.window_vbox.pack_start (self.hbox)
@@ -163,6 +175,12 @@ class GmailConfigWindow():
 		else:
 			self.password_entry.set_visibility (False)
 
+	def onBatteryEnabledToggle(self, widget, user_params=None):
+		if widget.get_active ():
+			self.battery_polling_entry.set_sensitive (False)
+		else:
+			self.battery_polling_entry.set_sensitive (True)
+
 	def onCancel(self, widget, user_params=None):
 		self.window.destroy ()
 		self.close_event.set ()
@@ -173,37 +191,53 @@ class GmailConfigWindow():
 		proxy = self.proxy_entry.get_text ()
 		ac_polling = int (self.ac_polling_entry.get_value ())
 		battery_polling = int (self.battery_polling_entry.get_value ())
+		battery_disable = self.battery_disable_checkbutton.get_active ()
 
-		if username == '' or password == '':
+		if username == '':
 			#gtk.gdk.threads_enter ()
 			dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK, type=gtk.MESSAGE_ERROR)
 			dialog.set_position (gtk.WIN_POS_CENTER)
 			dialog.set_modal (True)
-			dialog.set_markup ('Error!\n\nBoth username and password are required!')
+			dialog.set_markup ('Error!\n\nUsername is required!')
 			dialog.run ()
 			dialog.destroy ()
 			#gtk.gdk.threads_leave ()
 			return False
-		else:
-			if username.find ('@gmail.com') == -1:
-				username += '@gmail.com'
-			try:
-				self.config.add_section (username)
-			except ConfigParser.DuplicateSectionError:
-				pass
-			self.config.set (username, 'password', password)
-			self.config.set (username, 'proxy', proxy)
-			self.config.set (username, 'ac_polling', str (ac_polling))
-			self.config.set (username, 'battery_polling', str (battery_polling))
-			self.config.write (open (os.path.expanduser ('~/.gmail-notifier.conf'), 'w'))
 
-			if self.gConn:
-				#self.gConn.set_ac_frequency (ac_polling)
-				#self.gConn.set_battery_frequency (battery_polling)
-				self.gConn.resetCredentials (username, password, proxy)
+		try:
+			config_password = self.config.get (username, 'password')
+		except ConfigParser.Error:
+			config_password = None
 
-			self.window.destroy ()
-			self.close_event.set ()
+		if password == '' and config_password == None:
+			dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK, type=gtk.MESSAGE_ERROR)
+			dialog.set_position (gtk.WIN_POS_CENTER)
+			dialog.set_modal (True)
+			dialog.set_markup ('Error!\n\nPassword is required!')
+			dialog.run ()
+			dialog.destroy ()
+			return False
+		
+		if username.find ('@gmail.com') == -1:
+			username += '@gmail.com'
+		try:
+			self.config.add_section (username)
+		except ConfigParser.DuplicateSectionError:
+			pass
+		self.config.set (username, 'password', (password, config_password)[password == ''])
+		self.config.set (username, 'proxy', proxy)
+		self.config.set (username, 'ac_polling', str (ac_polling))
+		self.config.set (username, 'battery_polling', str (battery_polling))
+		self.config.set (username, 'battery_disable', str (battery_disable))
+		self.config.write (open (os.path.expanduser ('~/.gmail-notifier.conf'), 'w'))
+
+		if self.gConn:
+			self.gConn.set_ac_frequency (ac_polling)
+			self.gConn.set_battery_frequency ((battery_polling,0)[battery_disable])
+			self.gConn.resetCredentials (username, self.config.get (username, 'password'), self.config.get (username, 'proxy'))
+
+		self.window.destroy ()
+		self.close_event.set ()
 
 
 class Email():
@@ -497,14 +531,18 @@ OPTIONAL ARGUMENTS:
 			if self.username:
 				# We want data on the username from the provided config file
 				self.resetCredentials (self.username, config.get_password (self.username), config.get_proxy (self.username))
-				self.frequency = config.get_ac_polling (self.username)
+				self.ac_frequency = config.get_ac_polling (self.username)
+				self.battery_frequency = config.get_battery_polling (self.username)
+				self.frequency = self.ac_frequency
 			else:
 				# We are creating a new gConn here w/ a new entry
 				self.logger.debug ('Creating a new gConn with configure')
 				self.configure (config)
 				try:
-					frequency = config.get_ac_polling (self.username)
-				except AttributeError:
+					self.ac_frequency = config.get_ac_polling (self.username)
+					self.battery_frequency = config.get_battery_polling (self.username)
+					self.frequency = self.ac_frequency
+				except (AttributeError, ConfigParser.Error):
 					raise self.CancelledError
 		
 		# Start the gConn object if requested (not default)
@@ -519,9 +557,7 @@ OPTIONAL ARGUMENTS:
 		locals = threading.local ()
 		self.logger.debug ('GMailConn configure called')
 		locals.w = GmailConfigWindow (config, gConn=self)
-		self.logger.debug ('GmailConn configure window spawned')
-		locals.w.close_event.wait ()
-		self.logger.debug ('GmailConn configure window wait completed')
+		self.logger.debug ('GMailConn configure completed')
 
 
 	def start(self):
@@ -614,6 +650,15 @@ OPTIONAL ARGUMENTS:
 			self.onAuthenticationError = onAuthenticationError
 			self.onAuthenticationErrorArgs = onAuthenticationErrorArgs
 
+	def set_power(self, ac):
+		with self.lock:
+			if ac:
+				for event in self.events:
+					event.set ()
+				self.set_frequency (self.ac_frequency)
+			else:
+				self.set_frequency (self.battery_frequency)
+
 	def set_frequency(self, frequency=TIMEOUT):
 		"""Sets frequency (in secs), if unspecified, reset to default (20). Note, it may take up to
 		frequency (previous value) seconds for this update to take effect.  If your goal is to suspend
@@ -621,6 +666,14 @@ OPTIONAL ARGUMENTS:
 		"""
 		with self.lock:
 			self.frequency = frequency
+
+	def set_ac_frequency(self, frequency=TIMEOUT):
+		with self.lock:
+			self.ac_frequency = frequency
+
+	def set_battery_frequency(self, frequency=TIMEOUT):
+		with self.lock:
+			self.battery_frequency = frequency
 
 	def set_logLevel(self, logLevel):
 		"""Sets the log level for gmailLib. Expects a log level from the standard python logging module (e.g. logging.DEBUG)"""
@@ -654,7 +707,7 @@ OPTIONAL ARGUMENTS:
 		locals = threading.local ()
 		locals.event = threading.Event ()
 		self.lock.acquire ()
-		self.events.append ((threading.current_thread ().getName (), locals.event))
+		self.events.append (locals.event)
 		self.lock.release ()
 		while True:
 			self.lock.acquire ()
@@ -751,7 +804,7 @@ OPTIONAL ARGUMENTS:
 			self.opener = urllib2.build_opener(auth_handler)
 		
 		if self.started:
-			self.events[0][1].set ()
+			self.events[0].set ()
 		
 		self.auth_error = False
 		self.lock.release ()
