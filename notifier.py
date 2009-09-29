@@ -1,14 +1,19 @@
 #!/usr/bin/env python
 # Gmail Notifier v2
 
+import os
+import sys
+
 import logging
-logging.basicConfig (level=logging.DEBUG, format="%(asctime)s [%(levelname)s]\t{%(thread)d} %(name)s:%(lineno)d %(message)s")
+if 'debug' in sys.argv or 'DEBUG' in sys.argv:
+	logLevel = logging.DEBUG
+else:
+	logLevel = logging.WARNING
+logging.basicConfig (level=logLevel, format="%(asctime)s [%(levelname)s]\t{%(thread)d} %(name)s:%(lineno)d %(message)s")
 logger = logging.getLogger ('notifier')
 
 APP_NAME = 'gmail-notifier'
 
-import os
-import sys
 import gtk
 gtk.gdk.threads_init ()
 import gobject
@@ -59,6 +64,7 @@ def updateTooltip(status_icon, gtk_locked=False):
 				elif not gConn.isConnected (update=False):
 					# There is a _very_ small window before one of onUpdate,onAuthenticationError,onDisconnect has been called
 					locals.tooltip += ('\n' + gConn.getUsername () + ': Connecting...')
+					locals.noConn = True
 				else:
 					locals.tooltip += ('\n' + gConn.getUsername () + ': No unread messages')
 
@@ -212,7 +218,7 @@ def main():
 				gmailLib.GmailConn (
 					username,
 					config=config,
-					logLevel=logging.DEBUG
+					logLevel=logLevel
 					)
 				})
 
