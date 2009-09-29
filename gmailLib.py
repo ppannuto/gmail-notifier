@@ -12,6 +12,7 @@ from xml.utils.iso8601 import parse as parse_time
 
 import os
 import gtk
+import glib
 import gobject
 import ConfigParser
 import urllib2
@@ -511,6 +512,24 @@ OPTIONAL ARGUMENTS:
 		# Set up threading
 		self.lock = threading.RLock ()
 		self.network_lock = threading.Lock ()
+
+		# Load images as into pixbufs
+		try:
+			self.ICON_NOCONN = gtk.gdk.pixbuf_new_from_file ('noconnection.png')
+		except glib.GError:
+			self.ICON_NOCONN = None
+		try:
+			self.ICON_AUTHERR = gtk.gdk.pixbuf_new_from_file ('autherr.png')
+		except glib.GError:
+			self.ICON_AUTHERR = None
+		try:
+			self.ICON_NOMAIL = gtk.gdk.pixbuf_new_from_file ('nomail.png')
+		except glib.GError:
+			self.ICON_NOMAIL = None
+		try:
+			self.ICON_NEWMAIL = gtk.gdk.pixbuf_new_from_file ('newmail.png')
+		except glib.GError:
+			self.ICON_NEWMAIL = None
 		
 		# Initialize state
 		self.started = False
@@ -731,7 +750,7 @@ OPTIONAL ARGUMENTS:
 				locals.event.wait (timeout=locals.frequency)
 			locals.event.clear ()
 
-	def notify(self, emails=None, check_connected=True):
+	def notify(self, emails=None, check_connected=True, status_icon=None):
 		"""Show the newest email. You may provide a list of email dicts (as returned from getAllEmails) in emails to leverage
 		the notification engine to show an update for a subset of emails. Otherwise the cached email list will be used. The
 		emails argument is assumed to be sorted such that the newest email is emails[0].
@@ -744,6 +763,7 @@ OPTIONAL ARGUMENTS:
 		"""
 		title = ''
 		text = ''
+		icon = self.ICON_NOCONN
 		
 		self.lock.acquire ()
 		connected = self.isConnected (update=False)
@@ -760,6 +780,7 @@ OPTIONAL ARGUMENTS:
 		if self.auth_error:
 			title += 'Authentication Error'
 			text += 'Bad username or password'
+			icon = self.ICON_AUTHERR
 		elif check_connected and not connected:
 			title += 'Could not connect to GMail'
 			if self.last_update:
@@ -773,24 +794,40 @@ OPTIONAL ARGUMENTS:
 			if len (show) == 0:
 				title += 'You have no unread messages'
 				text += 'Last updated ' + asctime (localtime (self.last_update))
+				icon = self.ICON_NOMAIL
 			elif len (show) == 1:
 				title += show[0]['title']
 				text += show[0]['summary']
+				icon = self.ICON_NEWMAIL
 			else:
 				title += 'You have ' + str (self.xml_parser.email_count) + ' unread messages'
 				text += '(newest): ' + show[0]['title'] + '\n\n' + show[0]['summary']
+				icon = self.ICON_NEWMAIL
 		
 		try:
 			n = pynotify.Notification (title, text)
+			n.set_urgency (pynotify.URGENCY_LOW)
+			if status_icon:
+				n.attach_to_status_icon (status_icon)
+			if icon:
+				n.set_icon_from_pixbuf (icon)
 			n.show ()
 		except gobject.GError as e: #GError: Message did not receive a reply (timeout by message bus)
 			# This is likely transient? We'll give it one more shot, then ignore. XXX How does this happen? Should we silently ignore?
 			self.logger.warning ('Notifier error: ' + str (e))
-			try:
-				n = pynotify.Notification (title, text)
-				n.show ()
-			except gobject.GError as ee:
-				self.logger.error ('Notifier error (second try): ' + str(ee))
+			n = pynotify.Notification (title, text)
+			n.set_urgency (pynotify.URGENCY_LOW)
+			if status_icon:
+				n.attach_to_status_icon (status_icon)
+			if icon:
+				try:
+					n.set_icon_from_pixbuf (icon)
+				except glib.GError as e:
+					self.logger.warning ('Issue with notification pixbuf (BUG): ' + str(e))
+			n.show ()
+		except glib.GError as e:
+			self.logger.warning ('Issue with notification pixbuf (BUG): ' + str(e))
+
 		
 		self.lock.release ()
 
