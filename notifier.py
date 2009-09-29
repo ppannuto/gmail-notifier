@@ -88,7 +88,8 @@ def preferences(gConn=None):
 	logger.debug ('preferences called')
 	# XXX: ugly
 	if prefs_lock.locked (): # Why do Lock's not provide blocking=0 like RLock's?
-		logger.debug ('do not allow multiple instances of preferences at once')
+		logger.warning ('preferences window already open')
+		return
 	else:
 		prefs_lock.acquire ()
 
@@ -162,8 +163,7 @@ def onAuthenticationError(gConn, status_icon):
 
 	updateTooltip (status_icon)
 
-	locals.n = pynotify.Notification ('Authentication Error!', gConn.getUsername () + ' failed to authenticate')
-	locals.n.show ()
+	gConn.notify (status_icon=status_icon)
 
 
 ##################
