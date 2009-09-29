@@ -668,6 +668,7 @@ OPTIONAL ARGUMENTS:
 		"""
 		with self.lock:
 			self.frequency = frequency
+		self.logger.debug ('Frequency set to ' + str (frequency))
 
 	def set_ac_frequency(self, frequency=TIMEOUT):
 		with self.lock:
@@ -779,8 +780,17 @@ OPTIONAL ARGUMENTS:
 				title += 'You have ' + str (self.xml_parser.email_count) + ' unread messages'
 				text += '(newest): ' + show[0]['title'] + '\n\n' + show[0]['summary']
 		
-		n = pynotify.Notification (title, text)
-		n.show ()
+		try:
+			n = pynotify.Notification (title, text)
+			n.show ()
+		except gobject.GError as e: #GError: Message did not receive a reply (timeout by message bus)
+			# This is likely transient? We'll give it one more shot, then ignore. XXX How does this happen? Should we silently ignore?
+			self.logger.warning ('Notifier error: ' + str (e))
+			try:
+				n = pynotify.Notification (title, text)
+				n.show ()
+			except gobject.GError as ee:
+				self.logger.error ('Notifier error (second try): ' + str(ee))
 		
 		self.lock.release ()
 
