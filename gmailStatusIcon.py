@@ -15,7 +15,7 @@ class GmailStatusIcon(gtk.StatusIcon):
 	TRAY_NEWMAIL = TRAY_NEWMAIL
 	TRAY_AUTHERR = TRAY_AUTHERR
 
-	def __init__(self, on_update, on_tellMe, on_preferences, on_about, on_close, args=None):
+	def __init__(self, on_update, on_tellMe, on_preferences, on_about, on_close, args=None, _=lambda s:s):
 		gtk.StatusIcon.__init__(self)
 		menu = '''
 			<ui>
@@ -32,14 +32,15 @@ class GmailStatusIcon(gtk.StatusIcon):
 				</menubar>
 			</ui>
 		'''
+		### Underscored letter is accelerator key (keyboard shortcut)
 		actions = [
 				('Menu', None, 'Menu'),
-				('Update', gtk.STOCK_REFRESH, '_Update now', None, 'Force an immediate refresh', on_update),
-				('TellMe', None, '_Tell me again', None, 'Repeat the last notification', on_tellMe),
-				('Inbox', None, 'Go to my _Inbox...', None, 'Open your inbox in the default browser', self.on_inbox),
-				('Preferences', gtk.STOCK_PREFERENCES, '_Preferences...', None, 'Configure GmailNotifier2', on_preferences),
-				('About', gtk.STOCK_ABOUT, '_About...', None, 'About GmailNotifier2', on_about),
-				('Close', gtk.STOCK_CLOSE, '_Close', None, 'Exit GmailNotifier2', on_close)
+				('Update', gtk.STOCK_REFRESH, _('_Update now'), None, 'Force an immediate refresh', on_update),
+				('TellMe', None, _('_Tell me again'), None, 'Repeat the last notification', on_tellMe),
+				('Inbox', None, _('Go to my _Inbox...'), None, 'Open your inbox in the default browser', self.on_inbox),
+				('Preferences', gtk.STOCK_PREFERENCES, _('_Preferences...'), None, 'Configure GmailNotifier2', on_preferences),
+				('About', gtk.STOCK_ABOUT, _('_About...'), None, 'About GmailNotifier2', on_about),
+				('Close', gtk.STOCK_CLOSE, _('_Close'), None, 'Exit GmailNotifier2', on_close)
 			  ]
 
 		ag = gtk.ActionGroup ('Gmail Notifier Actions')
@@ -49,18 +50,30 @@ class GmailStatusIcon(gtk.StatusIcon):
 		self.manager.add_ui_from_string (menu)
 		self.menu = self.manager.get_widget ('/Menubar/Menu/About').props.parent
 		self.set_from_file (self.TRAY_NOCONN)
-		self.set_tooltip ('Gmail Notifier -- Not Connected')
+		self.set_tooltip (_('Gmail Notifier') + '\n' + _('Not Connected'))
 		self.set_visible (True)
 		self.connect ('activate', self.on_icon_click)
 		self.connect ('popup-menu', self.on_popup_menu)
 
 	def on_inbox(self, data):
-		import webbrowser
-		webbrowser.open('http://mail.google.com')
+		try:
+			import webbrowser
+		except ImportError:
+			return
+		try:
+			webbrowser.open('http://mail.google.com')
+		except webbrowser.Error:
+			return
 
 	def on_icon_click(self, data):
-		import webbrowser
-		webbrowser.open('http://mail.google.com')
+		try:
+			import webbrowser
+		except ImportError:
+			return
+		try:
+			webbrowser.open('http://mail.google.com')
+		except webbrowser.Error:
+			return
 
 	def on_popup_menu(self, status, button, time):
 		self.menu.popup (None, None, None, button, time)

@@ -32,7 +32,7 @@ class GmailConfigWindow():
 	DEFAULT_AC_POLL = 20
 	DEFAULT_BATTERY_POLL = 60
 
-	def __init__(self, config, gConn=None, username=None):
+	def __init__(self, config, gConn=None, username=None, _=lambda s:s):
 		"""Shows a preferences dialog for a gConn object. If a gConn object is supplied, all relevant settings
 		will be updated on the object, including a call to resetCredentials (e.g. this is a very appropriate
 		response resolving an AuthenticationError raised by a gConn object)
@@ -50,9 +50,10 @@ class GmailConfigWindow():
 		#self.window = gtk.Window ()
 		self.window = gtk.Dialog ()
 		if username:
-			self.window.set_title ('Configure ' + username)
+			### Configure username -- e.g. Configure notifier@gmail.com
+			self.window.set_title (_('Configure %s') % username)
 		else:
-			self.window.set_title ('Configure a new account')
+			self.window.set_title (_('Configure a new account'))
 		try:
 			self.window.set_icon_from_file ('nomail.png')
 		except:
@@ -71,7 +72,7 @@ class GmailConfigWindow():
 		self.window_vbox.pack_start (self.table)
 		self.table.show ()
 
-		self.username_label = gtk.Label ('Username')
+		self.username_label = gtk.Label (_('Username'))
 		self.username_entry = gtk.Entry ()
 		if (username):
 			self.username_entry.set_text (username)
@@ -81,7 +82,7 @@ class GmailConfigWindow():
 		self.username_label.show ()
 		self.username_entry.show ()
 
-		self.password_label = gtk.Label ('Password')
+		self.password_label = gtk.Label (_('Password'))
 		self.password_entry = gtk.Entry ()
 		self.password_entry.set_visibility (False)
 		self.password_entry.connect ('activate', self.onClose)
@@ -90,14 +91,16 @@ class GmailConfigWindow():
 		self.password_label.show ()
 		self.password_entry.show ()
 
-		self.show_password_checkbutton = gtk.CheckButton ('Show Password')
+		### Toggle that controls ******** or password
+		self.show_password_checkbutton = gtk.CheckButton (_('Show Password'))
 		self.show_password_checkbutton.active = False
 		self.show_password_checkbutton.connect ('toggled', self.onShowPasswordToggle)
 		self.table.attach (self.show_password_checkbutton, 1, 2, 2, 3)
 		self.show_password_checkbutton.show ()
 
 		#Call the rest of the options 'advanced' and put them in an expander
-		self.expander = gtk.Expander ('Advanced')
+		### Advanced options
+		self.expander = gtk.Expander (_('Advanced'))
 		self.window_vbox.pack_start (self.expander)
 		self.expander.show ()
 
@@ -105,7 +108,7 @@ class GmailConfigWindow():
 		self.expander.add (self.expander_table)
 		self.expander_table.show ()
 
-		self.proxy_label = gtk.Label ('Proxy')
+		self.proxy_label = gtk.Label (_('Proxy'))
 		self.proxy_entry = gtk.Entry ()
 		self.proxy_entry.connect ('activate', self.onClose)
 		try:
@@ -117,7 +120,8 @@ class GmailConfigWindow():
 		self.proxy_label.show ()
 		self.proxy_entry.show ()
 
-		self.ac_polling_label = gtk.Label ('AC Polling Frequency (secs)')
+		### How often (in seconds) the notifier polls when on AC power
+		self.ac_polling_label = gtk.Label (_('AC Polling Frequency (secs)'))
 		self.ac_polling_entry = gtk.SpinButton ()
 		self.ac_polling_entry.set_numeric (True)
 		self.ac_polling_entry.set_increments (5, 5)
@@ -131,7 +135,8 @@ class GmailConfigWindow():
 		self.ac_polling_label.show ()
 		self.ac_polling_entry.show ()
 
-		self.battery_polling_label = gtk.Label ('Battery Polling Frequency (secs)')
+		### How often (in seconds) the notifier polls when on battery power
+		self.battery_polling_label = gtk.Label (_('Battery Polling Frequency (secs)'))
 		self.battery_polling_entry = gtk.SpinButton ()
 		self.battery_polling_entry.set_numeric (True)
 		self.battery_polling_entry.set_increments (5, 5)
@@ -145,7 +150,8 @@ class GmailConfigWindow():
 		self.battery_polling_label.show ()
 		self.battery_polling_entry.show ()
 
-		self.battery_disable_checkbutton = gtk.CheckButton ('Disable on battery')
+		### Disable polling when the computer is on battery power
+		self.battery_disable_checkbutton = gtk.CheckButton (_('Disable on battery'))
 		try:
 			self.battery_disable_checkbutton.set_active (self.config.get_battery_disable (username))
 		except ConfigParser.Error:
@@ -204,7 +210,7 @@ class GmailConfigWindow():
 			dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK, type=gtk.MESSAGE_ERROR)
 			dialog.set_position (gtk.WIN_POS_CENTER)
 			dialog.set_modal (True)
-			dialog.set_markup ('Error!\n\nUsername is required!')
+			dialog.set_markup (_('Error!') + '\n\n' + _('Username is required!'))
 			dialog.run ()
 			dialog.destroy ()
 			#gtk.gdk.threads_leave ()
@@ -219,12 +225,12 @@ class GmailConfigWindow():
 			dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK, type=gtk.MESSAGE_ERROR)
 			dialog.set_position (gtk.WIN_POS_CENTER)
 			dialog.set_modal (True)
-			dialog.set_markup ('Error!\n\nPassword is required!')
+			dialog.set_markup (_('Error!') + '\n\n' + ('Password is required!'))
 			dialog.run ()
 			dialog.destroy ()
 			return False
 		
-		if username.find ('@gmail.com') == -1:
+		if username.find ('@') == -1:
 			username += '@gmail.com'
 		self.config.add_username (username)
 		self.config.set_password (username, (password, config_password)[password == ''])
@@ -330,7 +336,7 @@ class GmailXmlHandler(ContentHandler):
 		if last != name:
 			self.logger.debug ("Scoping error? Name: " + name + ", Last: " + last)
 			self.logger.debug ("self.emails: " + str (self.emails))
-			raise ParseError ("Scoping mismatch in endElement array")
+			raise ParseError ("Scoping mismatch in endElement array (BUG)")
 	
 	def characters(self, content):
 		if (self.path == self.PATH_FULLCOUNT):
@@ -505,7 +511,7 @@ OPTIONAL ARGUMENTS:
 		if (notifications):
 			import pynotify
 			if not pynotify.init ('Gmail Notifier'):
-				self.logger.critical ("Error loading / initializing pynotify module")
+				self.logger.critical ('Error loading %s' % 'pynotify')
 				raise ImportError
 		self.disconnect_threshold = disconnect_threshold
 		
@@ -750,7 +756,7 @@ OPTIONAL ARGUMENTS:
 				locals.event.wait (timeout=locals.frequency)
 			locals.event.clear ()
 
-	def notify(self, emails=None, check_connected=True, status_icon=None):
+	def notify(self, emails=None, check_connected=True, status_icon=None, _=lambda s:s):
 		"""Show the newest email. You may provide a list of email dicts (as returned from getAllEmails) in emails to leverage
 		the notification engine to show an update for a subset of emails. Otherwise the cached email list will be used. The
 		emails argument is assumed to be sorted such that the newest email is emails[0].
@@ -778,30 +784,36 @@ OPTIONAL ARGUMENTS:
 				show.append (email.dict ())
 		
 		if self.auth_error:
-			title += 'Authentication Error'
-			text += 'Bad username or password'
+			title += _('Authentication Error')
+			text += _('Bad username or password')
 			icon = self.ICON_AUTHERR
 		elif check_connected and not connected:
-			title += 'Could not connect to GMail'
+			title += _('Could not connect to GMail')
 			if self.last_update:
-				text += 'Last updated ' + asctime (localtime (self.last_update))
+				### %s is string timestamp returned from asctime(localtime())
+				text += _('Last updated %s') % asctime (localtime (self.last_update))
 				text += '\n\n'
-				text += 'You had ' + str (self.xml_parser.email_count) + ' unread message' + ('s','')[self.xml_parser.email_count == 1]
-				text += ' at the last update'
+				if self.xml_parser.email_count == 1:
+					### Singular 'message'
+					text += _('You had %d unread message at the last update') % self.xml_parser.email_count
+				else:
+					### Plural 'messages'
+					text += _('You had %d unread messages at the last update') % self.xml_parser.email_count
 			else:
-				text += 'You have not successfully connected to GMail during this session'
+				text += _('You have not successfully connected to GMail during this session')
 		else:
 			if len (show) == 0:
-				title += 'You have no unread messages'
-				text += 'Last updated ' + asctime (localtime (self.last_update))
+				title += _('You have no unread messages')
+				text += _('Last updated %s') % asctime (localtime (self.last_update))
 				icon = self.ICON_NOMAIL
 			elif len (show) == 1:
 				title += show[0]['title']
 				text += show[0]['summary']
 				icon = self.ICON_NEWMAIL
 			else:
-				title += 'You have ' + str (self.xml_parser.email_count) + ' unread messages'
-				text += '(newest): ' + show[0]['title'] + '\n\n' + show[0]['summary']
+				### %d always > 1 ('messages' always plural')
+				title += _('You have %d unread messages') % self.xml_parser.email_count
+				text += _('(newest): ') + show[0]['title'] + '\n\n' + show[0]['summary']
 				icon = self.ICON_NEWMAIL
 		
 		try:
@@ -815,16 +827,21 @@ OPTIONAL ARGUMENTS:
 		except gobject.GError as e: #GError: Message did not receive a reply (timeout by message bus)
 			# This is likely transient? We'll give it one more shot, then ignore. XXX How does this happen? Should we silently ignore?
 			self.logger.warning ('Notifier error: ' + str (e))
-			n = pynotify.Notification (title, text)
-			n.set_urgency (pynotify.URGENCY_LOW)
-			if status_icon:
-				n.attach_to_status_icon (status_icon)
-			if icon:
-				try:
-					n.set_icon_from_pixbuf (icon)
-				except glib.GError as e:
-					self.logger.warning ('Issue with notification pixbuf (BUG): ' + str(e))
-			n.show ()
+			try:
+				pynotify.init ('Gmail Notifier')
+				n = pynotify.Notification (title, text)
+				n.set_urgency (pynotify.URGENCY_LOW)
+				if status_icon:
+					n.attach_to_status_icon (status_icon)
+				if icon:
+					try:
+						n.set_icon_from_pixbuf (icon)
+					except glib.GError as e:
+						self.logger.warning ('Issue with notification pixbuf (BUG): ' + str(e))
+				n.show ()
+			except gobject.GError as e:
+				self.logger.error ('Notifier error: ' + str(e))
+				self.logger.error ('Giving up -- Notification will not be shown')
 		except glib.GError as e:
 			self.logger.warning ('Issue with notification pixbuf (BUG): ' + str(e))
 
@@ -836,8 +853,8 @@ OPTIONAL ARGUMENTS:
 		self.lock.acquire ()
 		reload (urllib2)
 		
-		if (username.rfind("@gmail.com")) == -1:
-			raise ParseError ('Bad username, @gmail.com is required', username)
+		if (username.rfind("@")) == -1:
+			raise ParseError ('Bad username, @ is required', username)
 
 		self.username = username
 		

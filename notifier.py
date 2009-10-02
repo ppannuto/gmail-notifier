@@ -1,6 +1,11 @@
 #!/usr/bin/env python
 # Gmail Notifier v2
 
+__version__ = 1.0
+
+def _(s):
+	return str (s)
+
 import os
 import sys
 
@@ -20,8 +25,8 @@ import gobject
 gobject.set_application_name(APP_NAME)
 import threading
 import pynotify
-if not pynotify.init ("Gmail Notifier"):
-	logger.critical ("Error loading pynotify, dying...")
+if not pynotify.init (_("Gmail Notifier")):
+	logger.critical (_("Error loading %s") % "pynotify")
 	raise Exception
 from time import sleep
 
@@ -44,29 +49,29 @@ prefs_lock = threading.Lock ()
 
 def updateTooltip(status_icon, gtk_locked=False):
 	locals = threading.local ()
-	locals.tooltip = 'Gmail Notifier'
+	locals.tooltip = _('Gmail Notifier')
 	locals.newmail = False
 	locals.authErr = False
 	locals.noConn = False
 	with gConns_lock:
 		if len (gConns) == 0:
-			locals.tooltip += ('\nNo accounts configured')
+			locals.tooltip += ('\n' + _('No accounts configured'))
 			locals.noConn = True
 		else:
 			for gConn in gConns.values ():
 				if gConn.isAuthenticationError ():
 					locals.authErr = True
-					locals.tooltip += ('\n' + gConn.getUsername () + ': Authentication Error')
+					locals.tooltip += ('\n' + gConn.getUsername () + ': ' + _('Authentication Error'))
 				elif gConn.getUnreadMessageCount (update=False):
 					locals.newmail = True
 					locals.cnt = gConn.getUnreadMessageCount (update=False)
 					locals.tooltip += ('\n' + gConn.getUsername () + ': ' + str (locals.cnt) + ' unread message' + ('s','')[locals.cnt == 1])
 				elif not gConn.isConnected (update=False):
 					# There is a _very_ small window before one of onUpdate,onAuthenticationError,onDisconnect has been called
-					locals.tooltip += ('\n' + gConn.getUsername () + ': Connecting...')
+					locals.tooltip += ('\n' + gConn.getUsername () + ': ' + _('Connecting...'))
 					locals.noConn = True
 				else:
-					locals.tooltip += ('\n' + gConn.getUsername () + ': No unread messages')
+					locals.tooltip += ('\n' + gConn.getUsername () + ': ' + _('No unread messages'))
 
 	if not gtk_locked:
 		gtk.gdk.threads_enter ()
@@ -130,12 +135,16 @@ def on_preferences(widget, user_params=None):
 
 def on_about(widget, user_params=None):
 	logger.debug ('on_about called')
-	# Do not need gtk_threads_enter/leave since we're in a callback from a widget
 	dialog = gtk.AboutDialog ()
-	dialog.set_name ('Gmail Notifier')
-	dialog.set_version ('2.0.0')
-	dialog.set_comments ('A simple applet to watch for new messages from a GMail account')
-	dialog.set_authors ('Pat Pannuto')
+	dialog.set_name (_('Gmail Notifier'))
+	### Version number
+	dialog.set_version (_(__version__))
+	### About dialog text
+	dialog.set_comments (_('A simple applet to watch for new messages from a GMail account'))
+	### Program author, please flip surnames if needed
+	dialog.set_authors ((_('Pat Pannuto'),))
+	### Translator credits -- Thank you!
+	dialog.set_translator_credits (_('Translator Name'))
 	dialog.run ()
 	dialog.destroy ()
 
@@ -154,7 +163,7 @@ def onDisconnect(gConn, status_icon):
 	logger.debug ('onDisconnect called by ' + gConn.getUsername ())
 	gtk.gdk.threads_enter ()
 	status_icon.set_from_file (status_icon.TRAY_NOCONN)
-	status_icon.set_tooltip ('Gmail Notifier -- Not Connected')
+	status_icon.set_tooltip (_('Gmail Notifier') + '\n' + _('Not Connected'))
 	gtk.gdk.threads_leave ()
 
 def onAuthenticationError(gConn, status_icon):
@@ -234,8 +243,8 @@ def main():
 			gtk.gdk.threads_enter ()
 			dialog = gtk.MessageDialog (buttons=gtk.BUTTONS_OK)
 			dialog.set_position (gtk.WIN_POS_CENTER)
-			dialog.set_title ('Gmail Notifier')
-			dialog.set_markup ('No accounts were found in the configuration file')
+			dialog.set_title (_('Gmail Notifier'))
+			dialog.set_markup (_('No accounts were found in the configuration file'))
 			dialog.run ()
 			dialog.destroy ()
 			gtk.gdk.threads_leave ()
