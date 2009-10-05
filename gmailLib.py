@@ -881,8 +881,8 @@ OPTIONAL ARGUMENTS:
 #		return open('feed.xml', 'r')
 
 	def refreshInfo(self, force_callbacks=False):
-		self.logger.debug ('refreshInfo -- starting...')
 		"""Internal -- There is no reason to call this directly"""
+		self.logger.debug ('refreshInfo -- starting...')
 		# get the page and parse it
 		self.network_lock.acquire ()
 		try:

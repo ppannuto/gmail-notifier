@@ -32,7 +32,6 @@ class GmailStatusIcon(gtk.StatusIcon):
 				</menubar>
 			</ui>
 		'''
-		### Underscored letter is accelerator key (keyboard shortcut)
 		actions = [
 				('Menu', None, 'Menu'),
 				('Update', gtk.STOCK_REFRESH, _('_Update now'), None, 'Force an immediate refresh', on_update),

@@ -1,0 +1,190 @@
+# gmail-notifier translations.
+# Copyright (C) 2009
+# This file is distributed under the same license as the gmail-notifier package.
+# Pat Pannuto <pat.pannuto@gmail.com> 2009
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: 1.0\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2009-10-02 11:14-0400\n"
+"PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
+"Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#: notifier.py:28 notifier.py:52 notifier.py:139 notifier.py:166
+#: notifier.py:246 gmailStatusIcon.py:53
+msgid "Gmail Notifier"
+msgstr ""
+
+#: notifier.py:29
+#, python-format
+msgid "Error loading %s"
+msgstr ""
+
+#: notifier.py:58
+msgid "No accounts configured"
+msgstr ""
+
+#. Short message indicating a bad username/password combination
+#: notifier.py:64 gmailLib.py:787
+msgid "Authentication Error"
+msgstr ""
+
+#: notifier.py:71
+msgid "Connecting..."
+msgstr ""
+
+#: notifier.py:74
+msgid "No unread messages"
+msgstr ""
+
+#. This is the text in the about dialog
+#: notifier.py:143
+msgid "A simple applet to watch for new messages from a GMail account"
+msgstr ""
+
+#. Author name, please invert surname if required
+#: notifier.py:145
+msgid "Pat Pannuto"
+msgstr ""
+
+#. You! Thanks!
+#: notifier.py:147
+msgid "Translator Name"
+msgstr ""
+
+#: notifier.py:166 gmailStatusIcon.py:53
+msgid "Not Connected"
+msgstr ""
+
+#: notifier.py:247
+msgid "No accounts were found in the configuration file"
+msgstr ""
+
+#. %s will expand to an account -- 'Configure myemail@gmail.com'
+#: gmailLib.py:54
+#, python-format
+msgid "Configure %s"
+msgstr ""
+
+#: gmailLib.py:56
+msgid "Configure a new account"
+msgstr ""
+
+#: gmailLib.py:75
+msgid "Username"
+msgstr ""
+
+#: gmailLib.py:85
+msgid "Password"
+msgstr ""
+
+#. (Checkbox) Show characters instead of *'s for password dialog
+#: gmailLib.py:95
+msgid "Show Password"
+msgstr ""
+
+#. GUI Expander for advanced options
+#: gmailLib.py:103
+msgid "Advanced"
+msgstr ""
+
+#: gmailLib.py:111
+msgid "Proxy"
+msgstr ""
+
+#. How often to poll GMail when on AC power
+#: gmailLib.py:124
+msgid "AC Polling Frequency (secs)"
+msgstr ""
+
+#. How often to poll GMail when on battery power
+#: gmailLib.py:139
+msgid "Battery Polling Frequency (secs)"
+msgstr ""
+
+#. (Checkbox) Disable this account on battery
+#: gmailLib.py:154
+msgid "Disable on battery"
+msgstr ""
+
+#: gmailLib.py:213 gmailLib.py:228
+msgid "Error!"
+msgstr ""
+
+#: gmailLib.py:213
+msgid "Username is required!"
+msgstr ""
+
+#: gmailLib.py:788
+msgid "Bad username or password"
+msgstr ""
+
+#: gmailLib.py:791
+msgid "Could not connect to GMail"
+msgstr ""
+
+#. %s will expand to a timestamp, 'Last updated Mon Oct  5 13:50:44 2009'
+#: gmailLib.py:794 gmailLib.py:807
+#, python-format
+msgid "Last updated %s"
+msgstr ""
+
+#. Singular
+#: gmailLib.py:798
+#, python-format
+msgid "You had %d unread message at the last update"
+msgstr ""
+
+#. Plural
+#: gmailLib.py:801
+#, python-format
+msgid "You had %d unread messages at the last update"
+msgstr ""
+
+#: gmailLib.py:803
+msgid "You have not successfully connected to GMail during this session"
+msgstr ""
+
+#: gmailLib.py:806
+msgid "You have no unread messages"
+msgstr ""
+
+#. %d always > 1, plural
+#: gmailLib.py:815
+#, python-format
+msgid "You have %d unread messages"
+msgstr ""
+
+#: gmailLib.py:816
+msgid "(newest): "
+msgstr ""
+
+#: gmailStatusIcon.py:38
+msgid "_Update now"
+msgstr ""
+
+#: gmailStatusIcon.py:39
+msgid "_Tell me again"
+msgstr ""
+
+#: gmailStatusIcon.py:40
+msgid "Go to my _Inbox..."
+msgstr ""
+
+#: gmailStatusIcon.py:41
+msgid "_Preferences..."
+msgstr ""
+
+#: gmailStatusIcon.py:42
+msgid "_About..."
+msgstr ""
+
+#: gmailStatusIcon.py:43
+msgid "_Close"
+msgstr ""
