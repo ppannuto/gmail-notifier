@@ -7,6 +7,7 @@ TRAY_NOCONN = 'noconnection.png'
 TRAY_NOMAIL = 'nomail.png'
 TRAY_NEWMAIL = 'newmail.png'
 TRAY_AUTHERR = 'autherr.png'
+TRAY_UPDATING = 'updating.png'
 
 class GmailStatusIcon(gtk.StatusIcon):
 
@@ -15,7 +16,7 @@ class GmailStatusIcon(gtk.StatusIcon):
 	TRAY_NEWMAIL = TRAY_NEWMAIL
 	TRAY_AUTHERR = TRAY_AUTHERR
 
-	def __init__(self, on_update, on_tellMe, on_preferences, on_about, on_close, args=None, _=lambda s:s):
+	def __init__(self, on_update, on_tellMe, on_preferences, on_about, on_close, _=lambda s:s):
 		gtk.StatusIcon.__init__(self)
 		menu = '''
 			<ui>
@@ -43,7 +44,7 @@ class GmailStatusIcon(gtk.StatusIcon):
 			  ]
 
 		ag = gtk.ActionGroup ('Gmail Notifier Actions')
-		ag.add_actions (actions, user_data=args)
+		ag.add_actions (actions, user_data=self)
 		self.manager = gtk.UIManager ()
 		self.manager.insert_action_group (ag, 0)
 		self.manager.add_ui_from_string (menu)

@@ -73,6 +73,9 @@ def updateTooltip(status_icon, gtk_locked=False):
 				else:
 					locals.tooltip += ('\n' + gConn.getUsername () + ': ' + _('No unread messages'))
 
+	# Since 1 tray icon has to represent the status of multiple inboxes, we assign a rough priority to the statuses to show,
+	# Namely, connection error > authentication error > new mail > no mail; the highest priority status from any of the
+	# inboxes is shown
 	if not gtk_locked:
 		gtk.gdk.threads_enter ()
 	status_icon.set_tooltip (locals.tooltip)
@@ -112,15 +115,20 @@ def preferences(gConn=None):
 # Callbacks from status_icon #
 ##############################
 
-def on_update(widget, user_params=None):
+def on_update(widget, status_icon):
 	logger.debug ('on_update clicked')
 	with gConns_lock:
 		logger.debug ('on_update got gConns_lock')
+		if len (gConns) == 0:
+			logger.warning ('XXX: Update clicked with no configured inboxes, we should notify in some way for this case')
+			return
 		for gConn in gConns.values ():
 			try:
 				gConn.update (async=True, force_callbacks=True)
 			except gConn.Error:
 				pass
+	status_icon.set_tooltip (_('Gmail Notifier') + '\n' + _('Updating...'))
+	status_icon.set_from_file (gmailStatusIcon.TRAY_UPDATING)
 	logger.debug ('on_update complete')
 
 def on_tellMe(widget, user_params=None):
@@ -213,7 +221,7 @@ def main():
 
 	#Set up the status icon (tray icon)
 	gtk.gdk.threads_enter ()
-	status_icon = gmailStatusIcon.GmailStatusIcon (on_update, on_tellMe, on_preferences, on_about, on_close, args=gConns)
+	status_icon = gmailStatusIcon.GmailStatusIcon (on_update, on_tellMe, on_preferences, on_about, on_close)
 	gtk.gdk.threads_leave ()
 	config.set_onNewGConn (onNewGConn, status_icon)
 	config.set_onDeleteGConn (onDeleteGConn, status_icon)
