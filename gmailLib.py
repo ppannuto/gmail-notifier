@@ -521,21 +521,33 @@ OPTIONAL ARGUMENTS:
 
 		# Load images as into pixbufs
 		try:
-			self.ICON_NOCONN = gtk.gdk.pixbuf_new_from_file ('noconnection.png')
-		except glib.GError:
+			import gmailStatusIcon as Icon
+			try:
+				self.ICON_NOCONN = gtk.gdk.pixbuf_new_from_file (Icon.TRAY_NOCONN)
+			except glib.GError:
+				self.ICON_NOCONN = None
+			try:
+				self.ICON_AUTHERR = gtk.gdk.pixbuf_new_from_file (Icon.TRAY_AUTHERR)
+			except glib.GError:
+				self.ICON_AUTHERR = None
+			try:
+				self.ICON_NOMAIL = gtk.gdk.pixbuf_new_from_file (Icon.TRAY_NOMAIL)
+			except glib.GError:
+				self.ICON_NOMAIL = None
+			try:
+				self.ICON_NEWMAIL = gtk.gdk.pixbuf_new_from_file (Icon.TRAY_NEWMAIL)
+			except glib.GError:
+				self.ICON_NEWMAIL = None
+			try:
+				self.ICON_OLDMAIL = gtk.gdk.pixbuf_new_from_file (Icon.TRAY_OLDMAIL)
+			except glib.GError:
+				self.ICON_OLDMAIL = None
+		except ImportError:
 			self.ICON_NOCONN = None
-		try:
-			self.ICON_AUTHERR = gtk.gdk.pixbuf_new_from_file ('autherr.png')
-		except glib.GError:
 			self.ICON_AUTHERR = None
-		try:
-			self.ICON_NOMAIL = gtk.gdk.pixbuf_new_from_file ('nomail.png')
-		except glib.GError:
 			self.ICON_NOMAIL = None
-		try:
-			self.ICON_NEWMAIL = gtk.gdk.pixbuf_new_from_file ('newmail.png')
-		except glib.GError:
 			self.ICON_NEWMAIL = None
+			self.ICON_OLDMAIL = None
 		
 		# Initialize state
 		self.started = False
@@ -1003,6 +1015,19 @@ OPTIONAL ARGUMENTS:
 		"""Returns authentication status in a thread-safe manner"""
 		with self.lock:
 			return self.auth_error
+
+	def isOldMail(self, update=None):
+		"""A boolean returning whether the 'unread' message in the inbox are uninteresting. That is, if a user leaves
+		a few unread messages for days, they are less interested in these than a newly arrived message. The exact
+		definition of old mail is still TBD"""
+		locals = threading.local ()
+		locals.new = False
+		with self.lock:
+			for email in self.xml_parser.emails:
+				if (time () - email.modified) < (60 * 6):
+					locals.new = True
+		return not locals.new
+
 
 	def getUsername(self, update=None):
 		"""Returns the GMail username associated with this gConn object"""

@@ -8,6 +8,7 @@ TRAY_NOMAIL = 'nomail.png'
 TRAY_NEWMAIL = 'newmail.png'
 TRAY_AUTHERR = 'autherr.png'
 TRAY_UPDATING = 'updating.png'
+TRAY_OLDMAIL = 'oldmail.png'
 
 class GmailStatusIcon(gtk.StatusIcon):
 
@@ -15,6 +16,8 @@ class GmailStatusIcon(gtk.StatusIcon):
 	TRAY_NOMAIL = TRAY_NOMAIL
 	TRAY_NEWMAIL = TRAY_NEWMAIL
 	TRAY_AUTHERR = TRAY_AUTHERR
+	TRAY_UPDATING = TRAY_UPDATING
+	TRAY_OLDMAIL = TRAY_OLDMAIL
 
 	def __init__(self, on_update, on_tellMe, on_preferences, on_about, on_close, _=lambda s:s):
 		gtk.StatusIcon.__init__(self)

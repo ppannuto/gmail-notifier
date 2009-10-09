@@ -51,6 +51,7 @@ def updateTooltip(status_icon, gtk_locked=False):
 	locals = threading.local ()
 	locals.tooltip = _('Gmail Notifier')
 	locals.newmail = False
+	locals.oldmail = False
 	locals.authErr = False
 	locals.noConn = False
 	with gConns_lock:
@@ -63,9 +64,15 @@ def updateTooltip(status_icon, gtk_locked=False):
 					locals.authErr = True
 					locals.tooltip += ('\n' + gConn.getUsername () + ': ' + _('Authentication Error'))
 				elif gConn.getUnreadMessageCount (update=False):
-					locals.newmail = True
+					if gConn.isOldMail (update=False):
+						locals.oldmail = True
+					else:
+						locals.newmail = True
 					locals.cnt = gConn.getUnreadMessageCount (update=False)
-					locals.tooltip += ('\n' + gConn.getUsername () + ': ' + str (locals.cnt) + ' unread message' + ('s','')[locals.cnt == 1])
+					if locals.cnt == 1:
+						locals.tooltip += ('\n' + gConn.getUsername () + _(': 1 unread message'))
+					else:
+						locals.tooltip += ('\n' + gConn.getUsername () + _(': %d unread messages') % (locals.cnt))
 				elif not gConn.isConnected (update=False):
 					# There is a _very_ small window before one of onUpdate,onAuthenticationError,onDisconnect has been called
 					locals.tooltip += ('\n' + gConn.getUsername () + ': ' + _('Connecting...'))
@@ -74,8 +81,8 @@ def updateTooltip(status_icon, gtk_locked=False):
 					locals.tooltip += ('\n' + gConn.getUsername () + ': ' + _('No unread messages'))
 
 	# Since 1 tray icon has to represent the status of multiple inboxes, we assign a rough priority to the statuses to show,
-	# Namely, connection error > authentication error > new mail > no mail; the highest priority status from any of the
-	# inboxes is shown
+	# Namely, connection error > authentication error > new mail > old mail > no mail; the highest priority status from any
+	# of the inboxes is shown
 	if not gtk_locked:
 		gtk.gdk.threads_enter ()
 	status_icon.set_tooltip (locals.tooltip)
@@ -85,6 +92,8 @@ def updateTooltip(status_icon, gtk_locked=False):
 		status_icon.set_from_file (status_icon.TRAY_AUTHERR)
 	elif locals.newmail:
 		status_icon.set_from_file (status_icon.TRAY_NEWMAIL)
+	elif locals.oldmail:
+		status_icon.set_from_file (status_icon.TRAY_OLDMAIL)
 	else:
 		status_icon.set_from_file (status_icon.TRAY_NOMAIL)
 	if not gtk_locked:
