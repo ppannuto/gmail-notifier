@@ -432,8 +432,9 @@ OPTIONAL ARGUMENTS:
 		The frequncy at which to poll GMail in seconds.
 		NOTE: Values < 20sec are not recommended as GMail may get mad at you...
 
-	disconnect_threshold=THRESHOLD [default: 60], also GmailConn.set_disconnect_threshold()
-		The amount of time allowed to pass between successful updates before gConn will consider itself disconnected
+	disconnectThreshold=THRESHOLD [default: 3.0], also GmailConn.set_disconnectThreshold()
+		A scale factor of frequency (e.g. for default 20 * 3.0 = 60s) that determines when
+		the gConn considers itself 'disconnected'
 
 	logLevel=logging.WARNING, also GmailConn.set_logLevel()
 		The level at which to log, from the standard python logging module
@@ -444,7 +445,7 @@ OPTIONAL ARGUMENTS:
 	url = host + "/mail/feed/atom"
 
 	TIMEOUT = 20		# Number of seconds until data is considered 'stale'
-	THRESHOLD = 60		# Number of seconds allowed between successful updates until gConn is considered disconnected
+	THRESHOLD = 3.0		# Scale (> 1) of TIMEOUT between successful updates to be considered 'disconnected'
 	last_update = 0		# The time (time.time()) of the last _successful_ update
 
 	class Error(Exception):
@@ -490,7 +491,7 @@ OPTIONAL ARGUMENTS:
 			username=None,
 			notifications=True,
 			start=False,
-			disconnect_threshold=THRESHOLD,
+			disconnectThreshold=THRESHOLD,
 			config=None,
 			logLevel=logging.WARNING
 			):
@@ -513,7 +514,7 @@ OPTIONAL ARGUMENTS:
 			if not pynotify.init ('Gmail Notifier'):
 				self.logger.critical ('Error loading %s' % 'pynotify')
 				raise ImportError
-		self.disconnect_threshold = disconnect_threshold
+		self.disconnectThreshold = disconnectThreshold
 		
 		# Set up threading
 		self.lock = threading.RLock ()
@@ -660,7 +661,8 @@ OPTIONAL ARGUMENTS:
 			self.onNewMailArgs = onNewMailArgs
 
 	def set_onDisconnect(self, onDisconnect, onDisconnectArgs=None):
-		"""Sets the onDisconnect callback.  Called whenever time.time() - gConn.last_update > gConn.disconnect_threshold.
+		"""Sets the onDisconnect callback.  Called whenever:
+			time.time() - gConn.last_update > (gConn.disconnectThreshold * gConn.frequency)
 		def onDisconnect(onDisconnectArgs, [gConn])
 			gConn			-- A reference to the calling object. See the warning in set_onUpdate
 			onDisconnectArgs	-- Arguments supplied here will be passed to the callback
@@ -688,6 +690,11 @@ OPTIONAL ARGUMENTS:
 		with self.lock:
 			self.onAuthenticationError = onAuthenticationError
 			self.onAuthenticationErrorArgs = onAuthenticationErrorArgs
+
+	def set_disconnectThreshold(self, disconnectThreshold=THRESHOLD):
+		"""A gConn will consider itself disconnected after disconnectThreshold * frequency seconds"""
+		with self.lock:
+			self.disconnectThreshold = disconnectThreshold
 
 	def set_power(self, ac):
 		with self.lock:
@@ -973,7 +980,7 @@ OPTIONAL ARGUMENTS:
 			# This is almost certainly a transient error, likely due to a lost connection, we don't really care
 			# we'll just try to update again in a minute and keep polling until we can actually connect again.
 			self.logger.info ("urllib Error: " + str(inst) + " (ignored)")
-			if (time() - self.last_update) > self.disconnect_threshold or force_callbacks:
+			if (time() - self.last_update) > (self.disconnectThreshold * self.frequency) or force_callbacks:
 				self.logger.info ('Disconnected! (last_update: ' + asctime (localtime (self.last_update)) + ')')
 				self.disconnected = True
 				copy = threading.local ()
@@ -984,14 +991,14 @@ OPTIONAL ARGUMENTS:
 			self.lock.release ()
 			return False
 
-	def u(self, update, use_disconnect_threshold=False):
+	def u(self, update, use_disconnectThreshold=False):
 		if update == True:
 			if self.refreshInfo () == False:
 				raise self.ConnectionError
 			return True
 		
 		self.lock.acquire ()
-		compare = (self.frequency, self.disconnect_threshold)[use_disconnect_threshold]
+		compare = (self.frequency, (self.disconnectThreshold * self.frequency))[use_disconnectThreshold]
 		if (time () - self.last_update) > compare:
 			self.lock.release ()
 			if update == False:
@@ -1003,13 +1010,14 @@ OPTIONAL ARGUMENTS:
 
 	def isConnected(self, update=None):
 		"""Call this method to establish if the gConn object believes itself to be connected. This is currently
-		defined by having valid data within the last disconnect_threshold seconds. Alternatively, set update=True to force an
-		immediate connection validation, even if it has previously connected once in the last disconnect_threshold seconds
+		defined by having valid data within the last (disconnectThreshold * frequency) seconds. Alternatively,
+		set update=True to force an immediate connection validation, even if it has previously connected once in
+		the last (disconnectThreshold * frequency) seconds
 		
 		Note, calling this with update=True will raise a GmailConn.ConnectionError if the connection fails
 		
 		Note, calling this with update=True will or update=None may block"""
-		return self.u (update, use_disconnect_threshold=True)
+		return self.u (update, use_disconnectThreshold=True)
 
 	def isAuthenticationError(self):
 		"""Returns authentication status in a thread-safe manner"""
