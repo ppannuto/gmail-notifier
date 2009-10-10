@@ -692,7 +692,9 @@ OPTIONAL ARGUMENTS:
 			self.onAuthenticationErrorArgs = onAuthenticationErrorArgs
 
 	def set_disconnectThreshold(self, disconnectThreshold=THRESHOLD):
-		"""A gConn will consider itself disconnected after disconnectThreshold * frequency seconds"""
+		"""A gConn will consider itself disconnected after disconnectThreshold * frequency seconds.
+		
+		Setting this much less than 2.0 would be ill advised."""
 		with self.lock:
 			self.disconnectThreshold = disconnectThreshold
 
