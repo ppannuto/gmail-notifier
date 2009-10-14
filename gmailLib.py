@@ -7,6 +7,7 @@ from xml import sax
 from xml.sax import saxutils
 from xml.sax import make_parser
 from xml.sax import ContentHandler
+from xml.sax import SAXParseException
 from xml.sax.handler import feature_namespaces
 from xml.utils.iso8601 import parse as parse_time
 
@@ -911,7 +912,10 @@ OPTIONAL ARGUMENTS:
 			locals.raw_xml = self.sendRequest ().read ()
 			self.network_lock.release ()
 			self.lock.acquire ()
-			raw_xml = sax.parseString (locals.raw_xml, self.xml_parser)
+			try:
+				raw_xml = sax.parseString (locals.raw_xml, self.xml_parser)
+			except SAXParseException:
+				raise self.ParseError
 			self.last_update = time ()
 			self.auth_error = False
 			self.logger.info ("refreshInfo completed successfully at " + asctime (localtime (self.last_update)))
