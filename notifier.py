@@ -14,7 +14,7 @@ if 'debug' in sys.argv or 'DEBUG' in sys.argv:
 	logLevel = logging.DEBUG
 else:
 	logLevel = logging.WARNING
-logging.basicConfig (level=logLevel, format="%(asctime)s [%(levelname)s]\t{%(thread)d} %(name)s:%(lineno)d %(message)s")
+logging.basicConfig (level=logLevel, format="%(asctime)s [%(levelname)s]\t{%(threadName)s} %(name)s:%(lineno)d %(message)s")
 logger = logging.getLogger ('notifier')
 
 APP_NAME = 'gmail-notifier'

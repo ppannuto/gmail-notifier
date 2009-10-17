@@ -498,7 +498,7 @@ OPTIONAL ARGUMENTS:
 			):
 		
 		self.logLevel = logLevel
-		logging.basicConfig (level=self.logLevel, format="%(asctime)s [%(levelname)s]\t{%(thread)s} %(name)s:%(lineno)d %(message)s")
+		logging.basicConfig (level=self.logLevel, format="%(asctime)s [%(levelname)s]\t{%(threadName)s} %(name)s:%(lineno)d %(message)s")
 		self.logger = logging.getLogger ('gmailLib')
 		
 		# Since we provide a relatively flexible init, we have to do a little sanity checking on arguments
