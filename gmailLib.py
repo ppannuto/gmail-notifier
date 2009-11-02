@@ -1,7 +1,6 @@
 #!/usr/bin/env python
 
 # gmailLib 0.5 by Pat Pannuto <pat.pannuto@gmail.com>
-# based loosely on gmailatom 0.0.1 by Juan Grande <juan.grande@gmail.com> from the original gmail-notify
 
 from xml import sax
 from xml.sax import saxutils
@@ -9,7 +8,6 @@ from xml.sax import make_parser
 from xml.sax import ContentHandler
 from xml.sax import SAXParseException
 from xml.sax.handler import feature_namespaces
-from xml.utils.iso8601 import parse as parse_time
 
 import os
 import gtk
@@ -19,12 +17,18 @@ import ConfigParser
 import urllib2
 import threading
 import logging
-from time import time,asctime,localtime
+from time import time,asctime,localtime,mktime,strptime
 
 try:
 	import pynotify
 except ImportError:
 	pass
+
+
+
+def parse_time(isotime):
+	# xml.utils.iso8601 doesn't exist everywhere?
+	return mktime (strptime (isotime, "%Y-%m-%dT%H:%M:%SZ"))
 
 
 class GmailConfigWindow():
