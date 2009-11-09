@@ -989,8 +989,8 @@ OPTIONAL ARGUMENTS:
 				return False
 			# This is almost certainly a transient error, likely due to a lost connection, we don't really care
 			# we'll just try to update again in a minute and keep polling until we can actually connect again.
-			self.logger.info ("urllib Error: " + str(inst) + " (ignored)")
-			if (time() - self.last_update) > (self.disconnectThreshold * self.frequency) or force_callbacks:
+			self.logger.info ("urllib Error: " + str (inst) + " (ignored)")
+			if (time () - self.last_update) > (self.disconnectThreshold * self.frequency) or force_callbacks:
 				self.logger.info ('Disconnected! (last_update: ' + asctime (localtime (self.last_update)) + ')')
 				self.disconnected = True
 				copy = threading.local ()
@@ -998,6 +998,19 @@ OPTIONAL ARGUMENTS:
 				copy.onDisconnectArgs = self.onDisconnectArgs
 				copy.onDisconnect (self, copy.onDisconnectArgs)
 			
+			self.lock.release ()
+			return False
+
+		except Exception as inst:
+			self.network_lock.release ()
+			self.logger.warning ("Unknown Error: " + str (inst) + " (suppressed)")
+			if (time () - self.last_update) > (self.disconnectThreshold * self.frequency) or force_callbacks:
+				self.logger.info ('Disconnected! (last_update: ' + asctime (localtime (self.last_update)) + ')')
+				self.disconnected = True
+				copy = threading.local ()
+				copy.onDisconnect = self.onDisconnect
+				copy.onDisconnectArgs = self.onDisconnectArgs
+				copy.onDisconnect (self, copy.onDisconnectArgs)
 			self.lock.release ()
 			return False
 
