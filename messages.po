@@ -1,4 +1,4 @@
-# gmail-notifier translations.
+# gmail-notifier translations
 # Copyright (C) 2009
 # This file is distributed under the same license as the gmail-notifier package.
 # Pat Pannuto <pat.pannuto@gmail.com> 2009
@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: 1.0\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2009-10-02 11:14-0400\n"
+"POT-Creation-Date: 2009-10-23 11:13-0400\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -17,7 +17,8 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 
 #: notifier.py:28 notifier.py:52 notifier.py:139 notifier.py:166
-#: notifier.py:246 gmailStatusIcon.py:53
+#: notifier.py:246 gmailStatusIcon.py:53 gmailStatusIcon.py:56 notifier.py:156
+#: notifier.py:183 notifier.py:263
 msgid "Gmail Notifier"
 msgstr ""
 
@@ -26,165 +27,185 @@ msgstr ""
 msgid "Error loading %s"
 msgstr ""
 
-#: notifier.py:58
+#: notifier.py:58 notifier.py:59
 msgid "No accounts configured"
 msgstr ""
 
 #. Short message indicating a bad username/password combination
-#: notifier.py:64 gmailLib.py:787
+#: notifier.py:64 gmailLib.py:787 gmailLib.py:809 notifier.py:65
 msgid "Authentication Error"
 msgstr ""
 
-#: notifier.py:71
+#. There is a _very_ small window before one of onUpdate,onAuthenticationError,onDisconnect has been called
+#: notifier.py:71 notifier.py:78
 msgid "Connecting..."
 msgstr ""
 
-#: notifier.py:74
+#: notifier.py:74 notifier.py:81
 msgid "No unread messages"
 msgstr ""
 
-#. This is the text in the about dialog
-#: notifier.py:143
+#. ## About dialog text
+#: notifier.py:143 notifier.py:160
 msgid "A simple applet to watch for new messages from a GMail account"
 msgstr ""
 
-#. Author name, please invert surname if required
-#: notifier.py:145
+#. ## Program author, please flip surnames if needed
+#: notifier.py:145 notifier.py:162
 msgid "Pat Pannuto"
 msgstr ""
 
-#. You! Thanks!
-#: notifier.py:147
+#. ## Translator credits -- Thank you!
+#: notifier.py:147 notifier.py:164
 msgid "Translator Name"
 msgstr ""
 
-#: notifier.py:166 gmailStatusIcon.py:53
+#: notifier.py:166 gmailStatusIcon.py:53 gmailStatusIcon.py:56 notifier.py:183
 msgid "Not Connected"
 msgstr ""
 
-#: notifier.py:247
+#: notifier.py:247 notifier.py:264
 msgid "No accounts were found in the configuration file"
 msgstr ""
 
 #. %s will expand to an account -- 'Configure myemail@gmail.com'
-#: gmailLib.py:54
+#. ## Configure username -- e.g. Configure notifier@gmail.com
+#: gmailLib.py:54 gmailLib.py:55
 #, python-format
 msgid "Configure %s"
 msgstr ""
 
-#: gmailLib.py:56
+#: gmailLib.py:56 gmailLib.py:57
 msgid "Configure a new account"
 msgstr ""
 
-#: gmailLib.py:75
+#: gmailLib.py:75 gmailLib.py:76
 msgid "Username"
 msgstr ""
 
-#: gmailLib.py:85
+#: gmailLib.py:85 gmailLib.py:86
 msgid "Password"
 msgstr ""
 
 #. (Checkbox) Show characters instead of *'s for password dialog
-#: gmailLib.py:95
+#. ## Toggle that controls ******** or password
+#: gmailLib.py:95 gmailLib.py:96
 msgid "Show Password"
 msgstr ""
 
 #. GUI Expander for advanced options
-#: gmailLib.py:103
+#. Call the rest of the options 'advanced' and put them in an expander
+#. ## Advanced options
+#: gmailLib.py:103 gmailLib.py:104
 msgid "Advanced"
 msgstr ""
 
-#: gmailLib.py:111
+#: gmailLib.py:111 gmailLib.py:112
 msgid "Proxy"
 msgstr ""
 
-#. How often to poll GMail when on AC power
-#: gmailLib.py:124
+#. ## How often (in seconds) the notifier polls when on AC power
+#: gmailLib.py:124 gmailLib.py:125
 msgid "AC Polling Frequency (secs)"
 msgstr ""
 
-#. How often to poll GMail when on battery power
-#: gmailLib.py:139
+#. ## How often (in seconds) the notifier polls when on battery power
+#: gmailLib.py:139 gmailLib.py:140
 msgid "Battery Polling Frequency (secs)"
 msgstr ""
 
 #. (Checkbox) Disable this account on battery
-#: gmailLib.py:154
+#. ## Disable polling when the computer is on battery power
+#: gmailLib.py:154 gmailLib.py:155
 msgid "Disable on battery"
 msgstr ""
 
-#: gmailLib.py:213 gmailLib.py:228
+#: gmailLib.py:213 gmailLib.py:228 gmailLib.py:214 gmailLib.py:229
 msgid "Error!"
 msgstr ""
 
-#: gmailLib.py:213
+#: gmailLib.py:213 gmailLib.py:214
 msgid "Username is required!"
 msgstr ""
 
-#: gmailLib.py:788
+#: gmailLib.py:788 gmailLib.py:810
 msgid "Bad username or password"
 msgstr ""
 
-#: gmailLib.py:791
+#: gmailLib.py:791 gmailLib.py:813
 msgid "Could not connect to GMail"
 msgstr ""
 
 #. %s will expand to a timestamp, 'Last updated Mon Oct  5 13:50:44 2009'
-#: gmailLib.py:794 gmailLib.py:807
+#. ## %s is string timestamp returned from asctime(localtime())
+#: gmailLib.py:794 gmailLib.py:807 gmailLib.py:816 gmailLib.py:829
 #, python-format
 msgid "Last updated %s"
 msgstr ""
 
-#. Singular
-#: gmailLib.py:798
+#. ## Singular 'message'
+#: gmailLib.py:798 gmailLib.py:820
 #, python-format
 msgid "You had %d unread message at the last update"
 msgstr ""
 
-#. Plural
-#: gmailLib.py:801
+#. ## Plural 'messages'
+#: gmailLib.py:801 gmailLib.py:823
 #, python-format
 msgid "You had %d unread messages at the last update"
 msgstr ""
 
-#: gmailLib.py:803
+#: gmailLib.py:803 gmailLib.py:825
 msgid "You have not successfully connected to GMail during this session"
 msgstr ""
 
-#: gmailLib.py:806
+#: gmailLib.py:806 gmailLib.py:828
 msgid "You have no unread messages"
 msgstr ""
 
-#. %d always > 1, plural
-#: gmailLib.py:815
+#. ## %d always > 1 ('messages' always plural')
+#: gmailLib.py:815 gmailLib.py:837
 #, python-format
 msgid "You have %d unread messages"
 msgstr ""
 
-#: gmailLib.py:816
+#: gmailLib.py:816 gmailLib.py:838
 msgid "(newest): "
 msgstr ""
 
-#: gmailStatusIcon.py:38
+#: gmailStatusIcon.py:38 gmailStatusIcon.py:41
 msgid "_Update now"
 msgstr ""
 
-#: gmailStatusIcon.py:39
+#: gmailStatusIcon.py:39 gmailStatusIcon.py:42
 msgid "_Tell me again"
 msgstr ""
 
-#: gmailStatusIcon.py:40
+#: gmailStatusIcon.py:40 gmailStatusIcon.py:43
 msgid "Go to my _Inbox..."
 msgstr ""
 
-#: gmailStatusIcon.py:41
+#: gmailStatusIcon.py:41 gmailStatusIcon.py:44
 msgid "_Preferences..."
 msgstr ""
 
-#: gmailStatusIcon.py:42
+#: gmailStatusIcon.py:42 gmailStatusIcon.py:45
 msgid "_About..."
 msgstr ""
 
-#: gmailStatusIcon.py:43
+#: gmailStatusIcon.py:43 gmailStatusIcon.py:46
 msgid "_Close"
+msgstr ""
+
+#: notifier.py:73
+msgid ": 1 unread message"
+msgstr ""
+
+#: notifier.py:75
+#, python-format
+msgid ": %d unread messages"
+msgstr ""
+
+#: notifier.py:139
+msgid "Updating..."
 msgstr ""
