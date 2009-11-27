@@ -786,7 +786,7 @@ OPTIONAL ARGUMENTS:
 			self.lock.release ()
 			if not locals.auth_error and (locals.frequency not in (0,-1)):
 				try:
-					self.refreshInfo ()
+					self.refreshInfo (force_callbacks=True)
 				except self.ParseError as e:
 					self.logger.warning (str(e))
 			if locals.frequency == 0 or locals.frequency == -1:
@@ -893,7 +893,6 @@ OPTIONAL ARGUMENTS:
 	def resetCredentials(self, username, password, proxy=None):
 		self.logger.debug ('resetCredentials called for ' + username)
 		self.lock.acquire ()
-		reload (urllib2)
 		
 		if (username.rfind("@")) == -1:
 			raise ParseError ('Bad username, @ is required', username)
