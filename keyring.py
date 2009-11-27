@@ -1,10 +1,20 @@
-# Copies of this are all over this internet, the file from at least
-# http://www.rittau.org/blog/20070726-01 by Sebastian Rittau
-# http://gmazzola.com/notes/Gnome_Keyring_Python.html by Gregory Mazzola
-#
-# Modified by Pat Pannuto
-
-__version__ = "$Revision: 14294 $"
+# This file is part of gmail-notifier.
+# 
+#     gmail-notifier is free software: you can redistribute it and/or modify
+#     it under the terms of the GNU General Public License as published by
+#     the Free Software Foundation, either version 3 of the License, or
+#     (at your option) any later version.
+# 
+#     gmail-notifier is distributed in the hope that it will be useful,
+#     but WITHOUT ANY WARRANTY; without even the implied warranty of
+#     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#     GNU General Public License for more details.
+# 
+#     You should have received a copy of the GNU General Public License
+#     along with gmail-notifier.  If not, see <http://www.gnu.org/licenses/>.
+# 
+# 
+# Copyright 2009 by Pat Pannuto <pat.pannuto@gmail.com>
 
 import gnomekeyring as gkey
 
