@@ -71,7 +71,7 @@ class GmailConfigWindow():
 		#self.window = gtk.Window ()
 		self.window = gtk.Dialog ()
 		if username:
-			### Configure username -- e.g. Configure notifier@gmail.com
+			### Configure username, %s expands to an email address -- e.g. Configure notifier@gmail.com
 			self.window.set_title (_('Configure %s') % username)
 		else:
 			self.window.set_title (_('Configure a new account'))
@@ -112,7 +112,7 @@ class GmailConfigWindow():
 		self.password_label.show ()
 		self.password_entry.show ()
 
-		### Toggle that controls ******** or password
+		### (Checkbox) Toggle that controls ******** or password
 		self.show_password_checkbutton = gtk.CheckButton (_('Show Password'))
 		self.show_password_checkbutton.active = False
 		self.show_password_checkbutton.connect ('toggled', self.onShowPasswordToggle)
@@ -120,7 +120,7 @@ class GmailConfigWindow():
 		self.show_password_checkbutton.show ()
 
 		#Call the rest of the options 'advanced' and put them in an expander
-		### Advanced options
+		### Advanced options (The text next to the GUI expander arrow)
 		self.expander = gtk.Expander (_('Advanced'))
 		self.window_vbox.pack_start (self.expander)
 		self.expander.show ()
@@ -171,7 +171,7 @@ class GmailConfigWindow():
 		self.battery_polling_label.show ()
 		self.battery_polling_entry.show ()
 
-		### Disable polling when the computer is on battery power
+		### (Checkbox) Disable polling when the computer is on battery power
 		self.battery_disable_checkbutton = gtk.CheckButton (_('Disable on battery'))
 		try:
 			self.battery_disable_checkbutton.set_active (self.config.get_battery_disable (username))
@@ -832,7 +832,7 @@ OPTIONAL ARGUMENTS:
 		elif check_connected and not connected:
 			title += _('Could not connect to GMail')
 			if self.last_update:
-				### %s is string timestamp returned from asctime(localtime())
+				### %s is string timestamp returned from asctime(localtime()) 'Last updated Mon Oct  5 13:50:44 2009'
 				text += _('Last updated %s') % asctime (localtime (self.last_update))
 				text += '\n\n'
 				if self.xml_parser.email_count == 1:

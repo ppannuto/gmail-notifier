@@ -70,8 +70,10 @@ def updateTooltip(status_icon, gtk_locked=False):
 						locals.newmail = True
 					locals.cnt = gConn.getUnreadMessageCount (update=False)
 					if locals.cnt == 1:
+						### message singular
 						locals.tooltip += ('\n' + gConn.getUsername () + _(': 1 unread message'))
 					else:
+						### messages plural ( %d > 1 )
 						locals.tooltip += ('\n' + gConn.getUsername () + _(': %d unread messages') % (locals.cnt))
 				elif not gConn.isConnected (update=False):
 					# There is a _very_ small window before one of onUpdate,onAuthenticationError,onDisconnect has been called
