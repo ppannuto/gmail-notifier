@@ -851,12 +851,18 @@ OPTIONAL ARGUMENTS:
 			elif len (show) == 1:
 				title += show[0]['title']
 				text += show[0]['summary']
-				icon = self.ICON_NEWMAIL
+				if self.isOldMail (modified=show[0]['modified']):
+					icon = self.ICON_OLDMAIL
+				else:
+					icon = self.ICON_NEWMAIL
 			else:
 				### %d always > 1 ('messages' always plural')
 				title += _('You have %d unread messages') % self.xml_parser.email_count
 				text += _('(newest): ') + show[0]['title'] + '\n\n' + show[0]['summary']
-				icon = self.ICON_NEWMAIL
+				if self.isOldMail (modified=show[0]['modified']):
+					icon = self.ICON_OLDMAIL
+				else:
+					icon = self.ICON_NEWMAIL
 		
 		try:
 			n = pynotify.Notification (title, text)
@@ -1063,16 +1069,23 @@ OPTIONAL ARGUMENTS:
 		with self.lock:
 			return self.auth_error
 
-	def isOldMail(self, update=None):
+	def isOldMail(self, update=None, modified=None):
 		"""A boolean returning whether the 'unread' message in the inbox are uninteresting. That is, if a user leaves
 		a few unread messages for days, they are less interested in these than a newly arrived message. The exact
-		definition of old mail is still TBD"""
+		definition of old mail is still TBD
+		
+		The optional argument email will check a specific email against the old mail threshold"""
+		old_threshold = 60 * 6	# XXX make configurable
 		locals = threading.local ()
 		locals.new = False
-		with self.lock:
-			for email in self.xml_parser.emails:
-				if (time () - email.modified) < (60 * 6):
-					locals.new = True
+		if modified:
+			if (time () - modified) < old_threshold:
+				locals.new = True
+		else:
+			with self.lock:
+				for email in self.xml_parser.emails:
+					if (time () - email.modified) < old_threshold:
+						locals.new = True
 		return not locals.new
 
 
