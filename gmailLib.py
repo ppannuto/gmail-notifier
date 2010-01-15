@@ -803,7 +803,7 @@ OPTIONAL ARGUMENTS:
 		the notification engine to show an update for a subset of emails. Otherwise the cached email list will be used. The
 		emails argument is assumed to be sorted such that the newest email is emails[0].
 
-		If check_connectd=True, the notification engine will prepend a warning to the notification if isConnected returns False
+		If check_connected=True, the notification engine will prepend a warning to the notification if isConnected returns False
 		
 		Note: This function will not automatically update the internal email list
 		
@@ -931,46 +931,6 @@ OPTIONAL ARGUMENTS:
 			locals.raw_xml = self.sendRequest ().read ()
 			self.network_lock.release ()
 			self.lock.acquire ()
-			try:
-				raw_xml = sax.parseString (locals.raw_xml, self.xml_parser)
-			except SAXParseException:
-				raise self.ParseError
-			self.last_update = time ()
-			self.auth_error = False
-			self.logger.info ("refreshInfo completed successfully at " + asctime (localtime (self.last_update)))
-			
-			show = list()
-			for email in self.xml_parser.emails:
-				if email.id not in self.shown:
-					self.shown.append (email.id)
-					show.append (email.dict ())
-
-			if len (show):
-				if not self.getUnreadMessageCount (False):
-					raise self.ParseError ('len (show): %d does not match getUnreadMessageCount: %d' % (len (show), self.getUnreadMessageCount (False)))
-			
-			if len (show) and self.notifications:
-				self.notify (show)
-
-			if len (show) and self.onNewMail:
-				copy = threading.local ()
-				copy.show = show
-				copy.onNewMail = self.onNewMail
-				copy.onNewMailArgs = self.onNewMailArgs
-				copy.onNewMail (self, copy.show, copy.onNewMailArgs)
-			
-			if self.last_modified != self.xml_parser.modified or self.disconnected or force_callbacks:
-				self.last_modified = self.xml_parser.modified
-				self.disconnected = False
-				if self.onUpdate:
-					copy = threading.local ()
-					copy.onUpdate = self.onUpdate
-					copy.onUpdateArgs = self.onUpdateArgs
-					copy.onUpdate (self, copy.onUpdateArgs)
-			
-			self.lock.release ()
-			return True
-		
 		except urllib2.URLError as inst:
 			self.network_lock.release ()
 			self.lock.acquire ()
@@ -1028,6 +988,47 @@ OPTIONAL ARGUMENTS:
 				copy.onDisconnect (self, copy.onDisconnectArgs)
 			self.lock.release ()
 			return False
+		
+		try:
+			raw_xml = sax.parseString (locals.raw_xml, self.xml_parser)
+		except SAXParseException:
+			# XXX should self.lock.release () be called here?
+			raise self.ParseError
+		self.last_update = time ()
+		self.auth_error = False
+		self.logger.info ("refreshInfo completed successfully at " + asctime (localtime (self.last_update)))
+		
+		show = list()
+		for email in self.xml_parser.emails:
+			if email.id not in self.shown:
+				self.shown.append (email.id)
+				show.append (email.dict ())
+
+		if len (show):
+			if not self.getUnreadMessageCount (False):
+				raise self.ParseError ('len (show): %d does not match getUnreadMessageCount: %d' % (len (show), self.getUnreadMessageCount (False)))
+		
+		if len (show) and self.notifications:
+			self.notify (show)
+
+		if len (show) and self.onNewMail:
+			copy = threading.local ()
+			copy.show = show
+			copy.onNewMail = self.onNewMail
+			copy.onNewMailArgs = self.onNewMailArgs
+			copy.onNewMail (self, copy.show, copy.onNewMailArgs)
+		
+		if self.last_modified != self.xml_parser.modified or self.disconnected or force_callbacks:
+			self.last_modified = self.xml_parser.modified
+			self.disconnected = False
+			if self.onUpdate:
+				copy = threading.local ()
+				copy.onUpdate = self.onUpdate
+				copy.onUpdateArgs = self.onUpdateArgs
+				copy.onUpdate (self, copy.onUpdateArgs)
+		
+		self.lock.release ()
+		return True
 
 	def u(self, update, use_disconnectThreshold=False):
 		if update == True:
