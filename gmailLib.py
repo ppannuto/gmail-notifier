@@ -984,6 +984,7 @@ OPTIONAL ARGUMENTS:
 
 		except Exception as inst:
 			self.network_lock.release ()
+			self.lock.acquire ()
 			self.logger.warning ("Unknown Error: " + str (inst) + " (suppressed)")
 			if (time () - self.last_update) > (self.disconnectThreshold * self.frequency) or force_callbacks:
 				self.logger.info ('Disconnected! (last_update: ' + asctime (localtime (self.last_update)) + ')')
