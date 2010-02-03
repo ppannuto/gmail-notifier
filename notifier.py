@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-# Gmail Notifier v2
+#!/usr/bin/python
+# Gmail Notifier v1.0
 
 __version__ = 1.0
 
