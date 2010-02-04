@@ -8,8 +8,6 @@ setup (
 		version='1.0',
 		author='Pat Pannuto',
 		author_email='pat.pannuto@gmail.com',
-		maintainer='Pat Pannuto',
-		maintainer_email='pat.ppannuto@gmail.com',
 		url='http://www-personal.umich.edu/~ppannuto/code/index.html',
 		description='A notification daemon for any number of GMail inboxes',
 		long_description="""
