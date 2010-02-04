@@ -25,6 +25,7 @@ def _(s):
 
 import os
 import sys
+sys.path.append ('/usr/lib/gmail-notifier')
 
 import logging
 if 'debug' in sys.argv or 'DEBUG' in sys.argv:
