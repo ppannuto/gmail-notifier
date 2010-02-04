@@ -76,7 +76,7 @@ class GmailConfigWindow():
 		else:
 			self.window.set_title (_('Configure a new account'))
 		try:
-			self.window.set_icon_from_file ('nomail.png')
+			self.window.set_icon_from_file ('icons/nomail.png')
 		except:
 			pass
 		self.window.set_position (gtk.WIN_POS_CENTER)

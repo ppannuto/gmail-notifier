@@ -18,12 +18,13 @@
 
 import gtk
 
-TRAY_NOCONN = 'noconnection.png'
-TRAY_NOMAIL = 'nomail.png'
-TRAY_NEWMAIL = 'newmail.png'
-TRAY_AUTHERR = 'autherr.png'
-TRAY_UPDATING = 'updating.png'
-TRAY_OLDMAIL = 'oldmail.png'
+ICONS_DIR = 'icons/'
+TRAY_NOCONN = ICONS_DIR + 'noconnection.png'
+TRAY_NOMAIL = ICONS_DIR + 'nomail.png'
+TRAY_NEWMAIL = ICONS_DIR + 'newmail.png'
+TRAY_AUTHERR = ICONS_DIR + 'autherr.png'
+TRAY_UPDATING = ICONS_DIR + 'updating.png'
+TRAY_OLDMAIL = ICONS_DIR + 'oldmail.png'
 
 class GmailStatusIcon(gtk.StatusIcon):
 

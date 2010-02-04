@@ -1,0 +1,14 @@
+[Desktop Entry]
+Name=Gmail Notifier
+Comment=Watch GMail inboxes for new mail
+TryExec=gmail-notifier
+Exec=gmail-notifier
+Icon=gmail-notifier
+Type=Application
+X-GNOME-DocPath=
+X-GNOME-Bugzilla-Bugzilla=
+X-GNOME-Bugzilla-Product=
+X-GNOME-Bugzilla-Component=
+X-GNOME-Bugzilla-Version=
+Categories=GNOME;GTK;Network;Email
+X-Ubuntu-Gettext-Domain=gmail-notifier
