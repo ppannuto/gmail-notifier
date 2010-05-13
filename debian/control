@@ -1,5 +1,5 @@
 Source: gmail-notifier
-Section: universe/mail
+Section: mail
 Priority: optional
 Maintainer: Pat Pannuto <pat.pannuto@gmail.com>
 XS-Python-Version: >= 2.6
