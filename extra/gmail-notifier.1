@@ -7,19 +7,30 @@ gmail-notifier [debug]
 .br
 .SH OPTIONS
 .TP
-.B -debug
-Output verbose debugging information
+.B debug
+Output verbose debugging information. No other command line options are accepted.
+.P
+A configuration
+file \fBgmail-notifier.conf\fP is sourced first from the running directory, then the user's home
+directory, and finally /etc
 .SH DESCRIPTION
-gmail-notifier is a taskbar program that watches GMail accounts for new mail
+gmail-notifier is a taskbar program that watches GMail accounts for new mail. Left-clicking will
+open the first configured account in your default browser. You may configure any number of accounts
+via \fBPreferences\fP in the context menu.
+.P
+There is one unified icon for all accounts, hovering over the icon will give a breakdown of the
+status of all configured accounts. The icon's status will reflect the 'highest priority' status
+of all configured accounts:
+   * Could not reach GMail (network error)
+   * Authentication Error (bad username / password)
+   * New Mail
+   * Stale Mail ("new" mail that is > 6 hours old)
+   * No Mail
 .br
 .SH VERSION
 This documentation describes
 .B gmail-notifier
 version 1.0
-.SH "SEE ALSO"
-
-.br
-.I  site
 .SH AUTHOR
 .br
 .B Pat Pannuto

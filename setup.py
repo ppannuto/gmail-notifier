@@ -38,7 +38,7 @@ setup (
 			('share/icons/hicolor/22x22/apps', glob.glob('icons/22x22/apps/*.png')),
 			('share/icons/hicolor/24x24/apps', glob.glob('icons/24x24/apps/*.png')),
 			('share/icons/hicolor/48x48/apps', glob.glob('icons/48x48/apps/*.png')),
-			('lib/gmail-notifier', ['gmailLib.py', 'gmailStatusIcon.py', 'keyring.py', 'notifierConfig.py']),
+			('share/gmail-notifier', ['gmailLib.py', 'gmailStatusIcon.py', 'keyring.py', 'notifierConfig.py']),
 			('share/gmail-notifier/icons', glob.glob ('icons/*.png')),
 			]
 		)
