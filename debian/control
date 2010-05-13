@@ -1,0 +1,28 @@
+Source: gmail-notifier
+Section: universe/mail
+Priority: optional
+Maintainer: Pat Pannuto <pat.pannuto@gmail.com>
+XS-Python-Version: >= 2.6
+Build-Depends: cdbs (>= 0.4.49), debhelper (>= 7), python-central (>= 0.5.6), python (>= 2.6)
+Standards-Version: 3.8.1
+Homepage: http://www-personal.umich.edu/~ppannuto/code/index.html
+
+Package: gmail-notifier
+Architecture: all
+XB-Python-Version: ${python:Versions}
+Depends: ${misc:Depends}, ${python:Depends}, python-gtk2, python-gobject, python-gnomekeyring, python-notify
+Description: Notification daemon that watches GMail inboxes for new mail
+ Gmail Notifier is a simple notification daemon that watches GMail inboxes
+ for new mail.
+ .
+ Gmail Notifier has a few distinct advantages over other similar programs:
+    * Multiple inbox support
+    * Safe password storage using gnome-keyring as opposed to a text file (!)
+    * "Stale" mail detection; emails that are unread but very old are
+      distinguished from new unread messages
+    * Consitent notifications, uses libnotify
+    * Intelligent power management: Reduce or disable polling on battery
+ .
+ Currently gmail-notifier only supports the GNOME desktop, however if there
+ is interest, the keyring class could easily be expanded to support
+ KWallet as well.

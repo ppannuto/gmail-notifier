@@ -33,7 +33,11 @@ setup (
 		data_files = [
 			('share/applications', ['extra/gmail-notifier.desktop']),
 			('share/man/man1', ['extra/gmail-notifier.1']),
-			('share/icons/hicolor/scalable/apps', ['icons/nomail.svg']),
+			('share/icons/hicolor/scalable/apps', glob.glob('icons/scalable/apps/*.svg')),
+			('share/icons/hicolor/16x16/apps', glob.glob('icons/16x16/apps/*.png')),
+			('share/icons/hicolor/22x22/apps', glob.glob('icons/22x22/apps/*.png')),
+			('share/icons/hicolor/24x24/apps', glob.glob('icons/24x24/apps/*.png')),
+			('share/icons/hicolor/48x48/apps', glob.glob('icons/48x48/apps/*.png')),
 			('lib/gmail-notifier', ['gmailLib.py', 'gmailStatusIcon.py', 'keyring.py', 'notifierConfig.py']),
 			('lib/gmail-notifier/icons', glob.glob ('icons/*.png')),
 			]

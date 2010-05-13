@@ -18,7 +18,7 @@
 
 import gtk
 
-ICONS_DIR = 'icons/'
+ICONS_DIR = '/usr/lib/gmail-notifier/icons/'
 TRAY_NOCONN = ICONS_DIR + 'noconnection.png'
 TRAY_NOMAIL = ICONS_DIR + 'nomail.png'
 TRAY_NEWMAIL = ICONS_DIR + 'newmail.png'
