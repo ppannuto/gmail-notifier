@@ -107,3 +107,6 @@ class GmailStatusIcon(gtk.StatusIcon):
 
 	def set_nomail(self):
 		self.set_from_file (TRAY_NOMAIL)
+
+	def set_tooltip(self, tooltip):
+		gtk.StatusIcon.set_tooltip (self, tooltip)
