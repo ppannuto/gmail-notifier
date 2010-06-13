@@ -1,5 +1,5 @@
-gmail-notifier (1.0-1) maverick; urgency=low
+gmail-notifier (1.0-1-0ubuntu1) maverick; urgency=low
 
-  * Initial release
+  * Initial release (LP: #593198)
 
  -- Pat Pannuto <pat.pannuto@gmail.com>  Thu, 04 Feb 2010 00:56:39 -0500
