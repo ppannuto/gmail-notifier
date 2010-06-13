@@ -61,7 +61,7 @@ class GmailStatusIcon(gtk.StatusIcon):
 		self.manager.insert_action_group (ag, 0)
 		self.manager.add_ui_from_string (menu)
 		self.menu = self.manager.get_widget ('/Menubar/Menu/About').props.parent
-		self.set_from_file (TRAY_NOCONN)
+		self.set_noconn ()
 		self.set_tooltip (_('Gmail Notifier') + '\n' + _('Not Connected'))
 		self.set_visible (True)
 		self.connect ('activate', self.on_icon_click)
