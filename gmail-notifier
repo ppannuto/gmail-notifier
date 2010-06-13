@@ -107,15 +107,15 @@ def updateTooltip(status_icon, gtk_locked=False):
 		gtk.gdk.threads_enter ()
 	status_icon.set_tooltip (locals.tooltip)
 	if locals.noConn:
-		status_icon.set_from_file (status_icon.TRAY_NOCONN)
+		status_icon.set_noconn ()
 	elif locals.authErr:
-		status_icon.set_from_file (status_icon.TRAY_AUTHERR)
+		status_icon.set_autherr ()
 	elif locals.newmail:
-		status_icon.set_from_file (status_icon.TRAY_NEWMAIL)
+		status_icon.set_newmail ()
 	elif locals.oldmail:
-		status_icon.set_from_file (status_icon.TRAY_OLDMAIL)
+		status_icon.set_oldmail ()
 	else:
-		status_icon.set_from_file (status_icon.TRAY_NOMAIL)
+		status_icon.set_nomail ()
 	if not gtk_locked:
 		gtk.gdk.threads_leave ()
 
@@ -157,7 +157,7 @@ def on_update(widget, status_icon):
 			except gConn.Error:
 				pass
 	status_icon.set_tooltip (_('Gmail Notifier') + '\n' + _('Updating...'))
-	status_icon.set_from_file (gmailStatusIcon.TRAY_UPDATING)
+	status_icon.set_updating ()
 	logger.debug ('on_update complete')
 
 def on_tellMe(widget, user_params=None):
@@ -199,7 +199,7 @@ def onUpdate(gConn, status_icon):
 def onDisconnect(gConn, status_icon):
 	logger.debug ('onDisconnect called by ' + gConn.getUsername ())
 	gtk.gdk.threads_enter ()
-	status_icon.set_from_file (status_icon.TRAY_NOCONN)
+	status_icon.set_noconn ()
 	status_icon.set_tooltip (_('Gmail Notifier') + '\n' + _('Not Connected'))
 	gtk.gdk.threads_leave ()
 

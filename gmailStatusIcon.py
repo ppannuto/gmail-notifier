@@ -28,13 +28,6 @@ TRAY_OLDMAIL = ICONS_DIR + 'oldmail.png'
 
 class GmailStatusIcon(gtk.StatusIcon):
 
-	TRAY_NOCONN = TRAY_NOCONN
-	TRAY_NOMAIL = TRAY_NOMAIL
-	TRAY_NEWMAIL = TRAY_NEWMAIL
-	TRAY_AUTHERR = TRAY_AUTHERR
-	TRAY_UPDATING = TRAY_UPDATING
-	TRAY_OLDMAIL = TRAY_OLDMAIL
-
 	def __init__(self, on_update, on_tellMe, on_preferences, on_about, on_close, _=lambda s:s):
 		gtk.StatusIcon.__init__(self)
 		menu = '''
@@ -68,7 +61,7 @@ class GmailStatusIcon(gtk.StatusIcon):
 		self.manager.insert_action_group (ag, 0)
 		self.manager.add_ui_from_string (menu)
 		self.menu = self.manager.get_widget ('/Menubar/Menu/About').props.parent
-		self.set_from_file (self.TRAY_NOCONN)
+		self.set_from_file (TRAY_NOCONN)
 		self.set_tooltip (_('Gmail Notifier') + '\n' + _('Not Connected'))
 		self.set_visible (True)
 		self.connect ('activate', self.on_icon_click)
@@ -96,3 +89,21 @@ class GmailStatusIcon(gtk.StatusIcon):
 
 	def on_popup_menu(self, status, button, time):
 		self.menu.popup (None, None, None, button, time)
+
+	def set_updating(self):
+		self.set_from_file (TRAY_UPDATING)
+
+	def set_noconn(self):
+		self.set_from_file (TRAY_NOCONN)
+
+	def set_autherr(self):
+		self.set_from_file (TRAY_AUTHERR)
+
+	def set_newmail(self):
+		self.set_from_file (TRAY_NEWMAIL)
+
+	def set_oldmail(self):
+		self.set_from_file (TRAY_OLDMAIL)
+
+	def set_nomail(self):
+		self.set_from_file (TRAY_NOMAIL)
