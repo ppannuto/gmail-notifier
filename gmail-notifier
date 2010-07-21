@@ -308,15 +308,18 @@ def main():
 		bus = dbus.SystemBus ()
 		hal_obj = bus.get_object ('org.freedesktop.Hal', '/org/freedesktop/Hal/Manager')
 		hal = dbus.Interface (hal_obj, 'org.freedesktop.Hal.Manager')
-		
-		dev_obj = bus.get_object ("org.freedesktop.Hal", hal.FindDeviceByCapability ("ac_adapter")[0])
-		global dev
-		dev = dbus.Interface (dev_obj, "org.freedesktop.Hal.Device")
-		dev.connect_to_signal ("PropertyModified", onPowerChange)
-		
-		onPowerChange (None, None)
+
+		try:
+			dev_obj = bus.get_object ("org.freedesktop.Hal", hal.FindDeviceByCapability ("ac_adapter")[0])
+			global dev
+			dev = dbus.Interface (dev_obj, "org.freedesktop.Hal.Device")
+			dev.connect_to_signal ("PropertyModified", onPowerChange)
+
+			onPowerChange (None, None)
+		except IndexError:
+			logger.info ('No AC adaptor found on dbus; no power management hooks will be enabled for this session')
 	except ImportError:
-		pass
+		logger.warn ('Failed to import dbus module! power managment hooks disabled (try installing python-dbus?)')
 
 	updateTooltip (status_icon)
 
